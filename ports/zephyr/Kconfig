@@ -1,0 +1,35 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+# An initial Kconfig file for the Blecon library
+config BLECON
+    bool "Blecon library"
+    default n
+    depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF53X
+    depends on BT
+    depends on BT_PERIPHERAL
+    depends on BT_L2CAP_DYNAMIC_CHANNEL
+    depends on BT_ID_MAX >= 3
+    depends on BT_EXT_ADV_MAX_ADV_SET >= 3
+    depends on BT_MAX_CONN >= 2
+    depends on BT_BUF_ACL_TX_COUNT >= 8
+    depends on BT_BUF_ACL_TX_SIZE >= 251
+    depends on BT_BUF_ACL_RX_SIZE >= 251
+    depends on NRF_SECURITY
+    depends on MBEDTLS_PSA_CRYPTO_C
+    depends on MBEDTLS_ENABLE_HEAP
+    depends on MBEDTLS_HEAP_SIZE >= 8192
+    depends on PSA_CRYPTO_DRIVER_OBERON
+    depends on PSA_WANT_ALG_HMAC
+    depends on PSA_WANT_ALG_CHACHA20_POLY1305
+    depends on PSA_WANT_ALG_ECDH
+    depends on PSA_WANT_ECC_MONTGOMERY_255
+    depends on PSA_WANT_ALG_SHA_256
+    depends on PSA_WANT_ALG_HKDF
+    depends on PSA_CRYPTO_DRIVER_ALG_SHA_256_OBERON
+    depends on FLASH
+    depends on FLASH_PAGE_LAYOUT
+    depends on EVENTS
+    help
+        Enable the Blecon device library
+        Our initial release supports the Nordic nRF52 and nRF53 series

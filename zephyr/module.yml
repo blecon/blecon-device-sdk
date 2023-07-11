@@ -1,0 +1,6 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+build:
+  cmake: .
+  kconfig: ports/zephyr/Kconfig
