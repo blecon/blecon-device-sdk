@@ -1,0 +1,43 @@
+manifest:
+  projects:
+    - name: nrf
+      revision: v2.4.0
+      url: http://github.com/nrfconnect/sdk-nrf
+      import: true
+    - name: zephyr
+      revision: v2.4.0_blecon_patches
+      url: https://github.com/blecon/zephyr
+      import:
+        name-allowlist:
+          - TraceRecorderSource
+          - canopennode
+          - chre
+          - cmsis
+          - edtt
+          - fatfs
+          - hal_nordic
+          - hal_st # required for ST sensors (unrelated to STM32 MCUs)
+          - hal_wurthelektronik
+          - liblc3
+          - libmetal
+          - littlefs
+          - loramac-node
+          - lvgl
+          - lz4
+          - mipi-sys-t
+          - nanopb
+          - net-tools
+          - nrf_hw_models
+          - open-amp
+          - picolibc
+          - psa-arch-tests
+          - segger
+          - tinycbor
+          - tinycrypt
+          - tf-m-tests
+          - uoscore-uedhoc
+          - zcbor
+          - zscilib
+
+  self:
+    path: blecon-device-sdk
