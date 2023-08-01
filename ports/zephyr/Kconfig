@@ -33,3 +33,13 @@ config BLECON
     help
         Enable the Blecon device library
         Our initial release supports the Nordic nRF52 and nRF53 series
+
+config BLECON_NFC
+    bool "Blecon NFC support"
+    default y
+    depends on BLECON
+    depends on NFC_T2T_NRFXLIB
+    depends on NFC_NDEF_MSG
+    depends on NFC_NDEF_URI_MSG
+    depends on NFC_NDEF_RECORD
+    depends on NFC_NDEF_URI_REC

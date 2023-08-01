@@ -1,0 +1,13 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+blecon:
+  address: 0xdf000
+  end_address: 0xe0000
+  region: flash_primary
+  size: 0x1000
+nrf_dfu:
+  address: 0xe0000
+  end_address: 0x100000
+  region: flash_primary
+  size: 0x20000

@@ -16,9 +16,7 @@ This inital release supports the NRF52840 DK board along with the NCS v2.4.0 SDK
 | Board / Platform  | NCS       |
 |-                  |-          |
 | NRF52840 DK       | ✅        |
-
-### Limitations
-* NFC is not supported yet by the NCS port
+| NRF52840 Dongle   | ✅        |
 
 ##  License
 * Source code included within this repository is licensed under the [Apache 2.0 license](LICENSE.md) (SPDX: Apache-2.0)

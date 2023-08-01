@@ -130,8 +130,6 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
 }
 
 void blecon_zephyr_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
-    struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = (struct blecon_zephyr_bluetooth_t*) bluetooth;
-
     int ret = bt_enable(NULL);
     blecon_assert(ret == 0);
 
@@ -406,8 +404,6 @@ static void ble_read_conn_rssi(uint16_t handle, int8_t* rssi)
 
 	err = bt_hci_cmd_send_sync(BT_HCI_OP_READ_RSSI, buf, &rsp);
 	if (err) {
-		uint8_t reason = rsp ?
-			((struct bt_hci_rp_read_rssi *)rsp->data)->status : 0;
 		return;
 	}
 

@@ -5,6 +5,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+
 #include "stdio.h"
 #include "string.h"
 
@@ -63,6 +64,11 @@ const static struct blecon_modem_callbacks_t blecon_modem_callbacks = {
 
 void main(void)
 {
+#if defined(CONFIG_USB_CDC_ACM)
+    // Give a chance to UART to connect
+    k_sleep(K_MSEC(1000));
+#endif
+    
     // Init Event Loop
     struct blecon_event_loop_t* event_loop = blecon_zephyr_event_loop_new();
 
