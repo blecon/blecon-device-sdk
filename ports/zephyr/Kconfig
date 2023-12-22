@@ -43,3 +43,8 @@ config BLECON_NFC
     depends on NFC_NDEF_URI_MSG
     depends on NFC_NDEF_RECORD
     depends on NFC_NDEF_URI_REC
+
+config BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS
+    int "Maximum number of Bluetooth connections"
+    default 1
+    depends on BLECON

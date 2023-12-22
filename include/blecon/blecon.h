@@ -2,6 +2,12 @@
  * Copyright (c) Blecon Ltd
  * SPDX-License-Identifier: Apache-2.0
  */
+/** @file blecon.h
+    @brief The Blecon SDK API.
+*/
+/** @defgroup sdk Blecon SDK API
+ * @{
+ */
 
 #pragma once
 
@@ -73,6 +79,11 @@ enum blecon_modem_info_type_t {
     blecon_modem_info_type_external,
 };
 
+/**
+ * @struct Modem information
+ * @brief Information about underlying modem
+ * 
+ */
 struct blecon_modem_info_t {
     enum blecon_modem_info_type_t type;
     uint32_t firmware_version;
@@ -103,8 +114,13 @@ struct blecon_modem_callbacks_t {
 };
 
 /** 
- * @ brief Create new internal modem instance
+ * @brief Create new internal modem instance
  * 
+ * @param event_loop a platform-specific event loop instance
+ * @param bluetooth a platform-specific bluetooth instance
+ * @param crypto a platform-specific crypto instance
+ * @param nvm a platform-specific nvm instance
+ * @param nfc a platform-specific nfc instance
  * @return a pointer to a struct blecon_modem_t instance
  * */
 struct blecon_modem_t* blecon_int_modem_new(
@@ -116,8 +132,10 @@ struct blecon_modem_t* blecon_int_modem_new(
     );
 
 /** 
- * @ brief Create new external modem instance
+ * @brief Create new external modem instance
  * 
+ * @param event_loop a platform-specific event loop instance
+ * @param transport a platform-specific transport instance
  * @return a pointer to a struct blecon_modem_t instance
  * */
 struct blecon_modem_t* blecon_ext_modem_new(
@@ -236,3 +254,7 @@ enum blecon_ret_t blecon_get_identity(struct blecon_modem_t* blecon_modem, uint8
 #ifdef __cplusplus
 }
 #endif
+
+/**
+ * @}
+ */

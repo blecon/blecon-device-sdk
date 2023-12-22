@@ -13,6 +13,7 @@ extern "C" {
 #include "stdint.h"
 #include "stddef.h"
 #include "blecon/blecon_bluetooth_types.h"
+#include "blecon/blecon_scheduler.h"
 
 struct blecon_bluetooth_advertising_set_t {
     uint8_t adv_data[31];
@@ -23,6 +24,7 @@ struct blecon_bluetooth_advertising_set_t {
 
 struct blecon_bluetooth_t;
 struct blecon_bluetooth_l2cap_server_t;
+struct blecon_bluetooth_gatts_bearer_t;
 
 struct blecon_bluetooth_fn_t {
     void (*setup)(struct blecon_bluetooth_t* bluetooth);
@@ -44,6 +46,10 @@ struct blecon_bluetooth_fn_t {
     struct blecon_bluetooth_l2cap_server_t* (*l2cap_server_new)(struct blecon_bluetooth_t* bluetooth, uint8_t psm);
     struct blecon_bearer_t* (*l2cap_server_as_bearer)(struct blecon_bluetooth_l2cap_server_t* l2cap_server);
     void (*l2cap_server_free)(struct blecon_bluetooth_l2cap_server_t* l2cap_server);
+
+    struct blecon_bluetooth_gatts_bearer_t* (*gatts_bearer_new)(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid);
+    struct blecon_bearer_t* (*gatts_bearer_as_bearer)(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer);
+    void (*gatts_bearer_free)(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer);
 };
 
 struct blecon_bluetooth_callbacks_t {
@@ -53,11 +59,16 @@ struct blecon_bluetooth_callbacks_t {
 
 struct blecon_bluetooth_t {
     const struct blecon_bluetooth_fn_t* fns;
+    struct blecon_scheduler_t* scheduler;
     const struct blecon_bluetooth_callbacks_t* callbacks;
     void* callbacks_user_data;
 };
 
 struct blecon_bluetooth_l2cap_server_t {
+    struct blecon_bluetooth_t* bluetooth;
+};
+
+struct blecon_bluetooth_gatts_bearer_t {
     struct blecon_bluetooth_t* bluetooth;
 };
 
@@ -68,7 +79,9 @@ static inline void blecon_bluetooth_init(struct blecon_bluetooth_t* bluetooth, c
 }
 
 static inline void blecon_bluetooth_setup(struct blecon_bluetooth_t* bluetooth,
+    struct blecon_scheduler_t* scheduler,
     const struct blecon_bluetooth_callbacks_t* callbacks, void* callbacks_user_data) {
+    bluetooth->scheduler = scheduler;
     bluetooth->callbacks = callbacks;
     bluetooth->callbacks_user_data = callbacks_user_data;
     bluetooth->fns->setup(bluetooth);
@@ -130,6 +143,20 @@ static inline struct blecon_bluetooth_l2cap_server_t* blecon_bluetooth_l2cap_ser
 
 static inline void blecon_bluetooth_l2cap_server_free(struct blecon_bluetooth_l2cap_server_t* l2cap_server) {
     l2cap_server->bluetooth->fns->l2cap_server_free(l2cap_server);
+}
+
+static inline struct blecon_bearer_t* blecon_bluetooth_gatts_bearer_as_bearer(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer) {
+    return gatts_bearer->bluetooth->fns->gatts_bearer_as_bearer(gatts_bearer);
+}
+
+static inline struct blecon_bluetooth_gatts_bearer_t* blecon_bluetooth_gatts_bearer_new(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid) {
+    struct blecon_bluetooth_gatts_bearer_t* gatts_bearer = bluetooth->fns->gatts_bearer_new(bluetooth, characteristic_uuid);
+    gatts_bearer->bluetooth = bluetooth;
+    return gatts_bearer;
+}
+
+static inline void blecon_bluetooth_gatts_bearer_free(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer) {
+    gatts_bearer->bluetooth->fns->gatts_bearer_free(gatts_bearer);
 }
 
 // Callbacks

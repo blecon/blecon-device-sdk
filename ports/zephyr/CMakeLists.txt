@@ -21,6 +21,7 @@ target_sources(blecon_zephyr PRIVATE
   src/blecon_zephyr_nvm.c
   src/blecon_zephyr_l2cap_bearer.c
   src/blecon_zephyr_l2cap_server.c
+  src/blecon_zephyr_gatts_bearer.c
   src/blecon_zephyr_aead_cipher.h
   src/blecon_zephyr_mutex.c
   src/blecon_zephyr_misc.c

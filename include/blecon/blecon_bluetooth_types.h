@@ -31,6 +31,11 @@ struct blecon_bluetooth_phy_mask_t {
     bool phy_coded : 1;
 };
 
+struct blecon_bluetooth_bearer_mask_t {
+    bool bearer_gatt : 1;
+    bool bearer_l2cap : 1;
+};
+
 #ifdef __cplusplus
 }
 #endif

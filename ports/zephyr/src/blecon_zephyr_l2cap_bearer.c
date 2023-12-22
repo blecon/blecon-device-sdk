@@ -47,7 +47,7 @@ const static struct bt_l2cap_chan_ops blecon_zephyr_l2cap_ops = {
 
 const static struct bt_l2cap_chan_ops blecon_zephyr_l2cap_empty_ops = { 0 };
 
-NET_BUF_POOL_FIXED_DEFINE(l2cap_tx_pool, BLECON_L2CAP_MAX_CONNECTIONS * BLECON_L2CAP_MAX_QUEUED_TX_BUFFERS, // Handle a single connection at a time
+NET_BUF_POOL_FIXED_DEFINE(l2cap_tx_pool, CONFIG_BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS * BLECON_L2CAP_MAX_CONNECTIONS * BLECON_L2CAP_MAX_QUEUED_TX_BUFFERS, // Handle a single connection at a time
     BT_L2CAP_SDU_BUF_SIZE(BLECON_L2CAP_MTU), 8, NULL);
 
 void blecon_zephyr_l2cap_bearer_init_server(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer, struct blecon_event_loop_t* event_loop) {

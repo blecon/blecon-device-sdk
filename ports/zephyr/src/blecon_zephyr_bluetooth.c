@@ -10,6 +10,7 @@
 #include "blecon_zephyr_bluetooth_common.h"
 #include "blecon_zephyr_l2cap_bearer.h"
 #include "blecon_zephyr_l2cap_server.h"
+#include "blecon_zephyr_gatts_bearer.h"
 #include "blecon_zephyr_event_loop.h"
 #include "blecon/blecon_defs.h"
 #include "blecon/blecon_memory.h"
@@ -53,6 +54,9 @@
 #define BLUETOOTH_TX_POWER -30
 #elif defined(CONFIG_BT_CTLR_TX_PWR_MINUS_40)
 #define BLUETOOTH_TX_POWER -40
+#else
+#warning "No TX power defined"
+#define BLUETOOTH_TX_POWER 0
 #endif
 
 
@@ -102,7 +106,10 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
         .disconnect = blecon_zephyr_bluetooth_disconnect,
         .l2cap_server_new = blecon_zephyr_bluetooth_l2cap_server_new,
         .l2cap_server_as_bearer = blecon_zephyr_bluetooth_l2cap_server_as_bearer,
-        .l2cap_server_free = blecon_zephyr_bluetooth_l2cap_server_free
+        .l2cap_server_free = blecon_zephyr_bluetooth_l2cap_server_free,
+        .gatts_bearer_new = blecon_zephyr_bluetooth_gatts_bearer_new,
+        .gatts_bearer_as_bearer = blecon_zephyr_bluetooth_gatts_bearer_as_bearer,
+        .gatts_bearer_free = blecon_zephyr_bluetooth_gatts_bearer_free
     };
 
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = BLECON_ALLOC(sizeof(struct blecon_zephyr_bluetooth_t));
@@ -115,7 +122,6 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
 
     blecon_bluetooth_init(&zephyr_bluetooth->bluetooth, &bluetooth_fn);
 
-
     zephyr_bluetooth->event_loop = event_loop;
     zephyr_bluetooth->advertising = false;
     for(size_t idx = 0; idx < BLECON_MAX_ADVERTISING_SETS; idx++) {
@@ -126,12 +132,16 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
     zephyr_bluetooth->adv_interval_ms = 0;
     zephyr_bluetooth->conn = NULL;
 
+    blecon_zephyr_bluetooth_gatts_init(zephyr_bluetooth);
+
     return &zephyr_bluetooth->bluetooth;
 }
 
 void blecon_zephyr_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
-    int ret = bt_enable(NULL);
-    blecon_assert(ret == 0);
+    if(!bt_is_ready()) {
+        int ret = bt_enable(NULL);
+        blecon_assert(ret == 0);
+    }
 
     // Set initial address (random)
     blecon_zephyr_bluetooth_rotate_mac_address(bluetooth);
