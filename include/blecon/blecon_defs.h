@@ -51,3 +51,12 @@
 
 // Macro to generate a UUID for a GATT characteristic
 #define BLECON_GATT_CHARACTERISTIC_UUID(idx) 0xec, 0x4f, ((idx) >> 8u) & 0xffu, (idx) & 0xffu, 0x15, 0x37, 0x44, 0x3e, 0xb0, 0x5a, 0x71, 0x30, 0x51, 0x21, 0x2f, 0x1c
+
+// Maximum namespace size
+#define BLECON_NAMESPACE_MAX_SZ 32 // Including null terminator
+
+// Maximum method size
+#define BLECON_METHOD_MAX_SZ 32 // Including null terminator
+
+// Maximum content type size
+#define BLECON_CONTENT_TYPE_MAX_SZ 32 // Including null terminator

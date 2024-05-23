@@ -5,18 +5,17 @@
 
 ##  Getting started
 
-Please follow [the getting started guide in our docs](https://blecon.net//device-sdk-getting-started).
+Please follow [the getting started guide in our docs](https://developer.blecon.net/getting-started/blecon-modem-mcu).
 
 ##  Board & Platform support
 
-This inital release supports the NRF52840 DK board along with the NCS v2.4.0 SDK. Our `west.yml` manifest pulls in a Zephyr fork with two extra patches. If you're using the NCS-provided version of Zephyr, please cherry-pick the following patches:
-* https://github.com/blecon/zephyr/commit/04d59f3554d35290d2d6eac0e1d2e4e3564b525f
-* https://github.com/blecon/zephyr/commit/518a558f67e55afca551e90a69d4fddf6a7b1afb
+This release supports the following boards along with the NCS v2.6.1 SDK and Zephyr 3.6.0. Our `west.yml` manifest pulls in the NCS v2.6.1 SDK.
 
-| Board / Platform  | NCS       |
-|-                  |-          |
-| NRF52840 DK       | ✅        |
-| NRF52840 Dongle   | ✅        |
+| Board / Platform  | Supported    |
+|-                  |-             |
+| NRF52840 DK       | ✅            |
+| NRF52840 Dongle   | ✅            |
+| Nucleo L433RC-P   | ✅            |
 
 ##  License
 * Source code included within this repository is licensed under the [Apache 2.0 license](LICENSE.md) (SPDX: Apache-2.0)

@@ -31,3 +31,5 @@ struct blecon_buffer_t blecon_buffer_queue_peek(struct blecon_buffer_queue_t* bu
 bool blecon_buffer_queue_is_empty(struct blecon_buffer_queue_t* buffer_queue);
 
 size_t blecon_buffer_queue_size(struct blecon_buffer_queue_t* buffer_queue);
+
+void blecon_buffer_queue_clear(struct blecon_buffer_queue_t* buffer_queue);

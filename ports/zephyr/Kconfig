@@ -5,46 +5,114 @@
 config BLECON
     bool "Blecon library"
     default n
-    depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF53X
-    depends on BT
-    depends on BT_PERIPHERAL
-    depends on BT_L2CAP_DYNAMIC_CHANNEL
-    depends on BT_ID_MAX >= 3
-    depends on BT_EXT_ADV_MAX_ADV_SET >= 3
-    depends on BT_MAX_CONN >= 2
-    depends on BT_BUF_ACL_TX_COUNT >= 8
-    depends on BT_BUF_ACL_TX_SIZE >= 251
-    depends on BT_BUF_ACL_RX_SIZE >= 251
+    help
+        Enable the Blecon device library
+
+if BLECON
+
+choice
+    bool "Modem type"
+    default BLECON_INTERNAL_MODEM if (SOC_SERIES_NRF52X || SOC_SERIES_NRF53X)
+    default BLECON_EXTERNAL_MODEM if !(SOC_SERIES_NRF52X || SOC_SERIES_NRF53X)
+
+config BLECON_INTERNAL_MODEM
+    bool "Blecon internal modem"
+    imply BLECON_INTERNAL_MODEM_NFC
+    select BLECON_PORT_EVENT_LOOP
+    select BLECON_PORT_BLUETOOTH
+    select BLECON_PORT_CRYPTO
+    select BLECON_PORT_NVM
+    help
+        Our internal modem port supports the Nordic nRF52 and nRF53 series
+
+config BLECON_EXTERNAL_MODEM
+    bool "Blecon external modem"
+    select BLECON_PORT_EVENT_LOOP
+    select BLECON_PORT_UART
+
+endchoice
+
+config BLECON_INTERNAL_MODEM_NFC
+    bool "Blecon internal modem NFC support"
+    default n
+    depends on BLECON_INTERNAL_MODEM
+    select BLECON_PORT_NFC
+
+config BLECON_EXTERNAL_MODEM_UART_TRANSPORT_RX_FIFO_SZ
+    int "Blecon external modem UART RX FIFO size"
+    default 256
+    depends on BLECON_EXTERNAL_MODEM
+
+config BLECON_PORT_CRYPTO
+    bool "Blecon crypto port"
+    default n
     depends on NRF_SECURITY
     depends on MBEDTLS_PSA_CRYPTO_C
     depends on MBEDTLS_ENABLE_HEAP
     depends on MBEDTLS_HEAP_SIZE >= 8192
-    depends on PSA_CRYPTO_DRIVER_OBERON
-    depends on PSA_WANT_ALG_HMAC
-    depends on PSA_WANT_ALG_CHACHA20_POLY1305
-    depends on PSA_WANT_ALG_ECDH
-    depends on PSA_WANT_ECC_MONTGOMERY_255
-    depends on PSA_WANT_ALG_SHA_256
-    depends on PSA_WANT_ALG_HKDF
-    depends on PSA_CRYPTO_DRIVER_ALG_SHA_256_OBERON
+    select PSA_WANT_GENERATE_RANDOM
+    select PSA_WANT_ALG_HMAC
+    select PSA_WANT_ALG_CHACHA20_POLY1305
+    select PSA_WANT_ALG_ECDH
+    select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR
+    select PSA_WANT_ECC_MONTGOMERY_255
+    select PSA_WANT_ALG_SHA_256
+    select PSA_WANT_ALG_HKDF
+
+config BLECON_PORT_NVM
+    bool "Blecon NVM port"
+    default n
     depends on FLASH
     depends on FLASH_PAGE_LAYOUT
-    depends on EVENTS
-    help
-        Enable the Blecon device library
-        Our initial release supports the Nordic nRF52 and nRF53 series
 
-config BLECON_NFC
-    bool "Blecon NFC support"
-    default y
-    depends on BLECON
+config BLECON_PORT_NVM_ERASE
+    bool "Blecon NVM erase sector"
+    default n
+    depends on BLECON_PORT_NVM
+
+config BLECON_PORT_BLUETOOTH
+    bool "Blecon Bluetooth port"
+    default n
+    depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF53X
+    depends on BT
+    depends on BT_PERIPHERAL
+    depends on BT_USER_PHY_UPDATE
+    depends on BT_SMP
+    depends on BT_L2CAP_DYNAMIC_CHANNEL
+    depends on BT_EXT_ADV
+    depends on BT_EXT_ADV_MAX_ADV_SET >= 3
+    depends on BT_ID_MAX >= 3
+    depends on BT_MAX_CONN >= 2
+    depends on BT_BUF_ACL_TX_COUNT >= 8
+    depends on BT_BUF_ACL_TX_SIZE >= 251
+    depends on BT_BUF_ACL_RX_SIZE >= 251
+    depends on BT_DIS
+
+config BLECON_PORT_EVENT_LOOP
+    bool "Blecon event loop port"
+    default n
+    depends on EVENTS
+
+config BLECON_PORT_NFC
+    bool "Blecon NFC port"
+    depends on HAS_HW_NRF_NFCT
+    default n
     depends on NFC_T2T_NRFXLIB
     depends on NFC_NDEF_MSG
     depends on NFC_NDEF_URI_MSG
     depends on NFC_NDEF_RECORD
     depends on NFC_NDEF_URI_REC
 
+config BLECON_PORT_UART
+    bool "Blecon UART port"
+    default n
+    depends on SERIAL
+    depends on RING_BUFFER
+
 config BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS
     int "Maximum number of Bluetooth connections"
     default 1
-    depends on BLECON
+    depends on BLECON_PORT_BLUETOOTH
+
+endif
+

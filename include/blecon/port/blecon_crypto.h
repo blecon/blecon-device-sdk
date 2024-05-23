@@ -28,7 +28,7 @@ struct blecon_crypto_fn_t {
     bool (*x25519_dh)(struct blecon_crypto_t* crypto, const uint8_t* private_key, const uint8_t* peer_public_key, uint8_t* shared_secret);
     bool (*hkdf_sha256)(struct blecon_crypto_t* crypto, const uint8_t* secret, size_t secret_sz, const uint8_t* salt, size_t salt_sz, uint8_t* output, size_t output_sz);
     struct blecon_crypto_aead_cipher_t* (*aead_cipher_new)(struct blecon_crypto_t* crypto, const uint8_t* key, bool encrypt_ndecrypt);
-    bool (*aead_cipher_enc_auth)(struct blecon_crypto_aead_cipher_t* cipher, 
+    void (*aead_cipher_enc_auth)(struct blecon_crypto_aead_cipher_t* cipher, 
                 const uint8_t* nonce, size_t nonce_sz, 
                 const uint8_t* plaintext, size_t plaintext_sz, 
                 const uint8_t* additional_data, size_t additional_data_sz,
@@ -87,7 +87,7 @@ static inline struct blecon_crypto_aead_cipher_t* blecon_crypto_aead_cipher_new(
     return crypto->fns->aead_cipher_new(crypto, key, encrypt_ndecrypt);
 }
 
-static inline bool blecon_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, 
+static inline void blecon_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, 
             const uint8_t* nonce, size_t nonce_sz, 
             const uint8_t* plaintext, size_t plaintext_sz, 
             const uint8_t* additional_data, size_t additional_data_sz,

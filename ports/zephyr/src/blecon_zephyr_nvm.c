@@ -16,14 +16,13 @@
 #include "zephyr/drivers/flash.h"
 #include "zephyr/storage/flash_map.h"
 #include "zephyr/devicetree.h"
+#include "pm_config.h"
 
-#define BLECON_NVM_FLASH_AREA_LABEL     blecon
-#define BLECON_NVM_FLASH_AREA_DEVICE    FIXED_PARTITION_DEVICE(BLECON_NVM_FLASH_AREA_LABEL)
-#define BLECON_NVM_FLASH_AREA_OFFSET    FIXED_PARTITION_OFFSET(BLECON_NVM_FLASH_AREA_LABEL)
-#define BLECON_NVM_FLASH_AREA_ADDR      FIXED_PARTITION_DATA_FIELD(BLECON_NVM_FLASH_AREA_LABEL, _ADDRESS)
-#define BLECON_NVM_FLASH_AREA_SIZE      FIXED_PARTITION_SIZE(BLECON_NVM_FLASH_AREA_LABEL)
-#define BLECON_NVM_FLASH_AREA_ID        FIXED_PARTITION_ID(BLECON_NVM_FLASH_AREA_LABEL)
-#define BLECON_NVM_FLASH_CONTROLLER     DT_GPARENT(BLECON_NVM_FLASH_AREA_ID)
+#define BLECON_NVM_FLASH_AREA_DEVICE    DEVICE_DT_GET(DT_NODELABEL(PM_BLECON_DEV))
+#define BLECON_NVM_FLASH_AREA_OFFSET    PM_BLECON_OFFSET
+#define BLECON_NVM_FLASH_AREA_ADDR      PM_BLECON_ADDRESS
+#define BLECON_NVM_FLASH_AREA_SIZE      PM_BLECON_SIZE
+#define BLECON_NVM_FLASH_CONTROLLER     PM_BLECON_DEV
 
 #if DT_NODE_HAS_PROP(BLECON_NVM_FLASH_CONTROLLER, write_block_size)
 #define BLECON_NVM_FLASH_BLOCK_SIZE \
@@ -73,6 +72,10 @@ void blecon_zephyr_nvm_setup(struct blecon_nvm_t* nvm) {
     (void) zephyr_nvm;
 
     blecon_assert(device_is_ready(BLECON_NVM_FLASH_AREA_DEVICE));
+
+#if CONFIG_BLECON_PORT_NVM_ERASE
+    blecon_zephyr_nvm_erase(nvm);
+#endif
 }
 
 bool blecon_zephyr_nvm_is_free(struct blecon_nvm_t* nvm) {
@@ -87,8 +90,6 @@ bool blecon_zephyr_nvm_is_free(struct blecon_nvm_t* nvm) {
     }
 
     return true;
-
-    return false;
 }
 
 void* blecon_zephyr_nvm_address(struct blecon_nvm_t* nvm) {

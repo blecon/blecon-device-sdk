@@ -95,11 +95,14 @@ struct blecon_bearer_t* blecon_zephyr_bluetooth_gatts_bearer_as_bearer(struct bl
 
 void blecon_zephyr_bluetooth_gatts_bearer_free(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer) {
     struct blecon_zephyr_bluetooth_gatts_bearer_t* zephyr_gatts_bearer = (struct blecon_zephyr_bluetooth_gatts_bearer_t*)gatts_bearer;
+    (void)zephyr_gatts_bearer;
     // No-op
 }
 
 struct blecon_buffer_t blecon_zephyr_gatts_bearer_alloc(struct blecon_bearer_t* bearer, size_t sz, void* user_data) {
     struct blecon_zephyr_bluetooth_gatts_bearer_t* zephyr_gatts_bearer = (struct blecon_zephyr_bluetooth_gatts_bearer_t*)user_data;
+    (void)zephyr_gatts_bearer;
+    
     if(sz > blecon_zephyr_gatts_bearer_mtu(bearer, user_data)) {
         blecon_fatal_error();
     }
@@ -133,6 +136,8 @@ void blecon_zephyr_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blec
     if(ret) {
         blecon_fatal_error();
     }
+
+    blecon_buffer_free(buf);
 }
 
 void blecon_zephyr_gatts_bearer_close(struct blecon_bearer_t* bearer, void* user_data) {

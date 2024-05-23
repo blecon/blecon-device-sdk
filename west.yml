@@ -1,12 +1,12 @@
 manifest:
   projects:
     - name: nrf
-      revision: v2.4.0
-      url: http://github.com/nrfconnect/sdk-nrf
+      revision: v2.6.1
+      url: https://github.com/nrfconnect/sdk-nrf
       import: true
     - name: zephyr
-      revision: v2.4.0_blecon_patches
-      url: https://github.com/blecon/zephyr
+      revision: v3.5.99-ncs1-1
+      url: https://github.com/nrfconnect/sdk-zephyr
       import:
         name-allowlist:
           - TraceRecorderSource
@@ -16,7 +16,8 @@ manifest:
           - edtt
           - fatfs
           - hal_nordic
-          - hal_st # required for ST sensors (unrelated to STM32 MCUs)
+          - hal_st
+          - hal_stm32
           - hal_wurthelektronik
           - liblc3
           - libmetal

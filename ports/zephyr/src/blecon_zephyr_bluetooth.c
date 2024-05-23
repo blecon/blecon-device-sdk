@@ -21,7 +21,7 @@
 #include "zephyr/bluetooth/conn.h"
 #include "zephyr/bluetooth/gap.h"
 #include "zephyr/bluetooth/hci.h"
-#include "zephyr/random/rand32.h"
+#include "zephyr/random/random.h"
 #include "zephyr/sys/byteorder.h"
 
 #if defined(CONFIG_BT_CTLR_TX_PWR_PLUS_8)

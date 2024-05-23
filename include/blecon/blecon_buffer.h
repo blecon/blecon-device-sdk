@@ -20,6 +20,8 @@ struct blecon_buffer_t {
     size_t underlying_sz;
 };
 
+typedef struct blecon_buffer_t (*blecon_buffer_alloc_t)(size_t sz, void* user_data);
+
 struct blecon_buffer_t blecon_buffer_alloc(size_t sz);
 void blecon_buffer_free(struct blecon_buffer_t buffer);
 
@@ -28,7 +30,7 @@ static inline bool blecon_buffer_is_valid(struct blecon_buffer_t buffer) {
 }
 
 static inline struct blecon_buffer_t blecon_buffer_get_null(void) {
-    struct blecon_buffer_t buffer = {.data = NULL, .sz = 0, .underlying_mem = NULL};
+    struct blecon_buffer_t buffer = {.data = NULL, .sz = 0, .underlying_mem = NULL, .underlying_sz = 0};
     return buffer;
 }
 

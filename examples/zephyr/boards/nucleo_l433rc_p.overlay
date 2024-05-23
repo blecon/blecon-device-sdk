@@ -1,0 +1,16 @@
+// Copyright (c) Blecon Ltd
+// SPDX-License-Identifier: Apache-2.0
+
+&usart1 {
+    pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10 &usart1_rts_pa12 &usart1_cts_pa11>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	hw-flow-control;
+
+	status = "okay";
+
+	blecon_modem: blecon_modem {
+		compatible = "blecon,modem";
+		status = "okay";
+	};
+};

@@ -20,97 +20,100 @@ extern "C" {
 #include "stddef.h"
 
 #include "blecon_defs.h"
-#include "port/blecon_event_loop.h"
-#include "port/blecon_bluetooth.h"
-#include "port/blecon_nvm.h"
-#include "port/blecon_crypto.h"
-#include "port/blecon_nfc.h"
-#include "port/blecon_ext_modem_transport.h"
+#include "blecon_list.h"
+#include "blecon_modem.h"
 
+struct blecon_event_loop_t;
+struct blecon_bluetooth_t;
+struct blecon_crypto_t;
+struct blecon_nvm_t;
+struct blecon_nfc_t;
+struct blecon_ext_modem_transport_t;
+
+struct blecon_t;
 struct blecon_modem_t;
+struct blecon_request_t;
+struct blecon_request_send_data_op_t;
+struct blecon_request_receive_data_op_t;
+
+#define BLECON_REQUEST_LOCAL_STATUS_CODE_NS 0x100
+#define BLECON_REQUEST_REMOTE_STATUS_CODE_NS 0x200
 
 /**
- * @brief Return codes
+ * @brief Request status codes
  * 
  */
-enum blecon_ret_t {
-    blecon_ok, ///< OK
-    blecon_error_exceeds_mtu, ///< Message exceeds MTU
-    blecon_error_invalid_state, ///< This method cannot be called in the current state
-    blecon_error_buffer_too_small, ///< Data doesn't fit in the buffer
-    blecon_error_serialization, ///< Serialization error (external modem)
-    blecon_error_transport_error, ///< Transport error (external modem)
-};
-
-/**
- * @brief Modem modes
- * 
- */
-enum blecon_mode_t {
-    blecon_mode_high_performance, ///< High Performance mode
-    blecon_mode_balanced, ///< Balanced mode
-    blecon_mode_ultra_low_power, ///< Low Power mode
-};
-
-#define BLECON_REQUEST_LOCAL_ERROR_CODE_NS 0x100
-#define BLECON_REQUEST_REMOTE_ERROR_CODE_NS 0x200
-
-/**
- * @brief Request errors
- * 
- */
-enum blecon_request_error_t {
-    blecon_request_ok = 0, ///< OK
+enum blecon_request_status_code_t {
+    blecon_request_status_ok = 0, ///< OK
     
-    // Local error codes
-    blecon_request_error_timeout = BLECON_REQUEST_LOCAL_ERROR_CODE_NS + 0, ///< Request timed out
-    blecon_request_error_security_error = BLECON_REQUEST_LOCAL_ERROR_CODE_NS + 1, ///< The connection failed due to a security error
-    blecon_request_error_disconnected = BLECON_REQUEST_LOCAL_ERROR_CODE_NS + 2, ///< The link was disconnected before the request completed
-    
-    // Remote error codes
-    blecon_request_error_handler_not_set = BLECON_REQUEST_REMOTE_ERROR_CODE_NS + 0, ///< The network's handler is not set
-    blecon_request_error_handler_timeout = BLECON_REQUEST_REMOTE_ERROR_CODE_NS + 1, ///< The network's handler timed out
-    blecon_request_error_handler_failed = BLECON_REQUEST_REMOTE_ERROR_CODE_NS + 2, ///< The network's handler failed
-    blecon_request_error_network_not_set = BLECON_REQUEST_REMOTE_ERROR_CODE_NS + 3 ///< The device is attached to a Blecon network
+    // Local status codes
+    blecon_request_status_pending = BLECON_REQUEST_LOCAL_STATUS_CODE_NS + 0, ///< The request is pending
+    blecon_request_status_timeout = BLECON_REQUEST_LOCAL_STATUS_CODE_NS + 1, ///< Request timed out
+    blecon_request_status_transport_error = BLECON_REQUEST_LOCAL_STATUS_CODE_NS + 2, ///< A transport error occurred
+
+    // Remote status codes
+    blecon_request_status_handler_not_set = BLECON_REQUEST_REMOTE_STATUS_CODE_NS + 0, ///< The network's handler is not set
+    blecon_request_status_handler_timeout = BLECON_REQUEST_REMOTE_STATUS_CODE_NS + 1, ///< The network's handler timed out
+    blecon_request_status_handler_failed = BLECON_REQUEST_REMOTE_STATUS_CODE_NS + 2, ///< The network's handler failed
+    blecon_request_status_network_not_set = BLECON_REQUEST_REMOTE_STATUS_CODE_NS + 3 ///< The device is not attached to a Blecon network
 };
 
-enum blecon_modem_info_type_t {
-    blecon_modem_info_type_internal,
-    blecon_modem_info_type_external,
-};
-
-/**
- * @struct Modem information
- * @brief Information about underlying modem
- * 
- */
-struct blecon_modem_info_t {
-    enum blecon_modem_info_type_t type;
-    uint32_t firmware_version;
-};
+typedef uint32_t blecon_request_id_t; ///< A request ID
 
 /**
  * @brief Callbacks structure to populate by user
  * 
  */
-struct blecon_modem_callbacks_t {
+struct blecon_callbacks_t {
     /**
-     * @brief Called when a connection has been established.
-     * 
+     * @brief Called when a blecon connection is open.
+     * @param blecon the blecon instance
      */
-    void (*on_connection)(struct blecon_modem_t* modem, void* user_data);
+    void (*on_connection)(struct blecon_t* blecon);
+
+    /**
+     * @brief Called when a blecon connection is closed.
+     * @param blecon the blecon instance
+     */
+    void (*on_disconnection)(struct blecon_t* blecon);
+};
+
+/**
+ * @brief Callbacks structure to populate by user for requests
+ * 
+ */
+struct blecon_request_callbacks_t {
+    /**
+     * @brief Called when a request has completed and all data has been sent and received by the modem,
+     * or when the request terminated with an error.
+     * @param request the request instance
+     */
+    void (*on_closed)(struct blecon_request_t* request);
+
+    /**
+     * @brief Called when the data set in blecon_request_send_data() has been sent
+     * @param send_data_op the send data operation instance
+     * @param data_sent a flag indicating if the data was sent correctly
+     */
+    void (*on_data_sent)(struct blecon_request_send_data_op_t* send_data_op, bool data_sent);
+
+    /**
+     * @brief Allocate memory for incoming data
+     * @param receive_data_op the receive data operation instance
+     * @param sz the size of the buffer to allocate
+     * @return a pointer to the allocated buffer
+     */    
+    uint8_t* (*alloc_incoming_data_buffer)(struct blecon_request_receive_data_op_t* receive_data_op, size_t sz);
     
     /**
-     * @brief Called when a response is available.
-     * 
+     * @brief Called when new data is received for a request.
+     * @param receive_data_op the receive data operation instance
+     * @param data_received a flag indicating if data was received
+     * @param data the data received
+     * @param sz the size of the data received
+     * @param finished a flag indicating if this is the end of the data
      */
-    void (*on_response)(struct blecon_modem_t* modem, void* user_data);
-    
-    /**
-     * @brief Called when a request didn't complete successfully.
-     * 
-     */
-    void (*on_error)(struct blecon_modem_t* modem, void* user_data);
+    void (*on_data_received)(struct blecon_request_receive_data_op_t* receive_data_op, bool data_received, const uint8_t* data, size_t sz, bool finished);
 };
 
 /** 
@@ -121,135 +124,302 @@ struct blecon_modem_callbacks_t {
  * @param crypto a platform-specific crypto instance
  * @param nvm a platform-specific nvm instance
  * @param nfc a platform-specific nfc instance
+ * @param allocator a function to allocate memory
  * @return a pointer to a struct blecon_modem_t instance
  * */
-struct blecon_modem_t* blecon_int_modem_new(
-        struct blecon_event_loop_t* event_loop,
-        struct blecon_bluetooth_t* bluetooth,
-        struct blecon_crypto_t* crypto,
-        struct blecon_nvm_t* nvm,
-        struct blecon_nfc_t* nfc
-    );
+struct blecon_modem_t* blecon_int_modem_create(
+    struct blecon_event_loop_t* event_loop,
+    struct blecon_bluetooth_t* bluetooth,
+    struct blecon_crypto_t* crypto,
+    struct blecon_nvm_t* nvm,
+    struct blecon_nfc_t* nfc,
+    void* (*allocator)(size_t)
+);
+
+/** 
+ * @brief Destroy internal modem instance
+ * 
+ * @param modem a pointer to a struct blecon_modem_t instance created by blecon_int_modem_create()
+ * @param deallocator a function to deallocate memory or NULL
+ * */
+void blecon_int_modem_destroy(
+    struct blecon_modem_t* modem,
+    void (*deallocator)(void*)
+);
 
 /** 
  * @brief Create new external modem instance
  * 
  * @param event_loop a platform-specific event loop instance
  * @param transport a platform-specific transport instance
+ * @param allocator a function to allocate memory
  * @return a pointer to a struct blecon_modem_t instance
  * */
-struct blecon_modem_t* blecon_ext_modem_new(
+struct blecon_modem_t* blecon_ext_modem_create(
     struct blecon_event_loop_t* event_loop,
-    struct blecon_ext_modem_transport_t* transport);
+    struct blecon_ext_modem_transport_t* transport,
+    void* (*allocator)(size_t)
+);
+
+/** 
+ * @brief Destroy external modem instance
+ * 
+ * @param modem a pointer to a struct blecon_modem_t instance created by blecon_ext_modem_create()
+ * @param deallocator a function to deallocate memory or NULL
+ * */
+void blecon_ext_modem_destroy(
+    struct blecon_modem_t* modem,
+    void (*deallocator)(void*)
+);
 
 /**
- * @brief Set-up modem
- * 
- * @param modem the modem instance to set-up
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @brief Initialise Blecon
+ * @param blecon the blecon instance to initialise
+ * @param modem the modem instance to use
  */
-enum blecon_ret_t blecon_setup(struct blecon_modem_t* modem);
+void blecon_init(struct blecon_t* blecon, struct blecon_modem_t* modem);
+
+/**
+ * @brief Set-up Blecon
+ * 
+ * @param blecon the blecon instance to set-up
+ * @return true on success, or false on failure
+ */
+bool blecon_setup(struct blecon_t* blecon);
 
 /**
  * @brief Set callbacks
  * 
- * @param modem the modem instance
+ * @param blecon the blecon instance
  * @param callbacks a struct blecon_modem_callbacks_t structure containing the user's callbacks
+ * @param user_data user data to pass to the callbacks
  */
-void blecon_set_callbacks(struct blecon_modem_t* modem, const struct blecon_modem_callbacks_t* callbacks, void* user_data);
+void blecon_set_callbacks(struct blecon_t* blecon, const struct blecon_callbacks_t* callbacks, void* user_data);
 
 /**
- * @brief Set callbacks
+ * @brief Get information about the modem
  * 
- * @param modem the modem instance
+ * @param blecon the blecon instance
  * @param info a pointer to a struct blecon_modem_info_t structure which is populated on success
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
  */
-enum blecon_ret_t blecon_get_info(struct blecon_modem_t* modem, struct blecon_modem_info_t* info);
+void blecon_get_info(struct blecon_t* blecon, struct blecon_modem_info_t* info);
 
 /**
  * @brief Set application-related data
  * 
- * @param modem the modem instance
+ * @param blecon the blecon instance
  * @param application_model_id the device's specific model id encoded as a UUID (16 bytes long)
  * @param application_schema_version the device's schema version
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @return true on success, or false on failure
  */
-enum blecon_ret_t blecon_set_application_data(struct blecon_modem_t* blecon_modem, const uint8_t* application_model_id, uint32_t application_schema_version);
+bool blecon_set_application_data(struct blecon_t* blecon, const uint8_t* application_model_id, uint32_t application_schema_version);
 
 /**
- * @brief Identify the device to surrounding hotspots
+ * @brief Announce the device ID to surrounding hotspots
  * 
- * @param modem the modem instance
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @param blecon the blecon instance
+ * @return true on success, or false on failure
  */
-enum blecon_ret_t blecon_identify(struct blecon_modem_t* blecon_modem);
+bool blecon_announce(struct blecon_t* blecon);
 
 /**
- * @brief Request a connection to the Blecon infrastructure
+ * @brief Initiate a connection to the Blecon infrastructure
  * 
- * @param modem the modem instance
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @param blecon the blecon instance
+ * @return true on success, or false on failure
  */
-enum blecon_ret_t blecon_request_connection(struct blecon_modem_t* blecon_modem);
+bool blecon_connection_initiate(struct blecon_t* blecon);
 
 /**
- * @brief Cancel or close the current connection
+ * @brief Terminate the current connection, or cancel the connection attempt
  * 
- * @param modem the modem instance
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @param blecon the blecon instance
+ * @return true on success, or false on failure
  */
-enum blecon_ret_t blecon_close_connection(struct blecon_modem_t* blecon_modem);
+bool blecon_connection_terminate(struct blecon_t* blecon);
 
 /**
- * @brief Send a request to the integration
+ * @brief Check if a connection is established
  * 
- * @param modem the modem instance
- * @param data the data to send to the integration
- * @param sz the size of the data buffer
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @param blecon the blecon instance
+ * @return true if connected, or false if not
  */
-enum blecon_ret_t blecon_send_request(struct blecon_modem_t* blecon_modem, const uint8_t* data, size_t sz);
+bool blecon_is_connected(struct blecon_t* blecon);
 
 /**
- * @brief Get the error regarding the last request
+ * @brief Get the device's ID in URL form
  * 
- * @param modem the modem instance
- * @param error a pointer where the error code can be stored
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
- */
-enum blecon_ret_t blecon_get_error(struct blecon_modem_t* blecon_modem, enum blecon_request_error_t* request_error);
-
-/**
- * @brief Get the response to the sent request
- * 
- * @param modem the modem instance
- * @param data where to store the data sent by the integration
- * @param sz pointer to the maximum size that can be stored in data, updated to the actual stored size on success
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
- */
-enum blecon_ret_t blecon_get_response(struct blecon_modem_t* blecon_modem, uint8_t* data, size_t* sz);
-
-/**
- * @brief Get the device's URL
- * 
- * @param modem the modem instance
+ * @param blecon the blecon instance
  * @param url a char array where to store the url (0-terminated)
  * @param max_sz the maximum size of the array (including space for 0 terminator)
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @return true on success, or false on failure
  */
-enum blecon_ret_t blecon_get_url(struct blecon_modem_t* blecon_modem, char* url, size_t max_sz);
+bool blecon_get_url(struct blecon_t* blecon, char* url, size_t max_sz);
 
 /**
  * @brief Get the device's ID in UUID form
  * 
- * @param modem the modem instance
+ * @param blecon the blecon instance
  * @param uuid a 16-byte array where to store the uuid
- * @return enum blecon_ret_t blecon_ok on success, or an error code on failure
+ * @return true on success, or false on failure
  */
-enum blecon_ret_t blecon_get_identity(struct blecon_modem_t* blecon_modem, uint8_t* uuid);
+bool blecon_get_identity(struct blecon_t* blecon, uint8_t* uuid);
 
-// Provided by implementation
+/**
+ * @brief A structure used to build a request based on its attributes
+ * 
+ */
+struct blecon_request_parameters_t {
+    bool oneway; ///< If true, the request is one-way (no response expected)
+    const char* namespace; ///< The namespace of this request's event type
+    const char* method; ///< The method of this request's event type
+    const char* request_content_type; ///< The content type of the request (e.g. application/cbor)
+    const char* response_content_type; ///< The expected content type of the response (e.g. application/cbor)
+    size_t response_mtu; ///< The maximum size of a response data frame (for a single data operation)
+    const struct blecon_request_callbacks_t* callbacks; ///< The callbacks to use for this request
+    void* user_data; ///< User data to pass to the callbacks
+};
+
+/**
+ * @brief Initialise a request
+ * 
+ * @param request the request instance to initialise
+ * @param parameters a struct blecon_request_parameters_t structure containing the request's parameters
+ */
+void blecon_request_init(struct blecon_request_t* request, const struct blecon_request_parameters_t* parameters);
+
+/**
+ * @brief Retrieve a request's parameters
+ * 
+ * @param request the request instance
+ * @return a pointer to the request's parameters
+ */
+const struct blecon_request_parameters_t* blecon_request_get_parameters(struct blecon_request_t* request);
+
+/**
+ * @brief Submit a request for processing
+ * 
+ * @param blecon the blecon instance
+ * @param request the request to submit
+ */
+void blecon_request_submit(struct blecon_t* blecon, struct blecon_request_t* request);
+
+/**
+ * @brief Get the status of a request
+ * 
+ * @param request the request instance
+ * @return the status code of the request
+ */
+enum blecon_request_status_code_t blecon_request_get_status(struct blecon_request_t* request);
+
+/**
+ * @brief Send data for a request
+ * 
+ * @param op a pointer to a struct blecon_request_send_data_op_t structure which is populated on success
+ * @param request a pointer to the relevant request structure
+ * @param data the data to send
+ * @param sz the size of the data buffer
+ * @param finished a flag indicating if this is the end of the data
+ * @param user_data a pointer to user-defined data which will be associated with the operation
+ * @return true if the operation was queued successfully, or false on failure
+ */
+bool blecon_request_send_data(
+    struct blecon_request_send_data_op_t* op,
+    struct blecon_request_t* request, 
+    const uint8_t* data, size_t sz, bool finished,
+    void* user_data);
+
+/**
+ * @brief Get the user data associated with a send data operation
+ * 
+ * @param op the send data operation instance
+ * @return a pointer to the user data
+ */
+void* blecon_request_send_data_op_get_user_data(struct blecon_request_send_data_op_t* op);
+
+/**
+ * @brief Start a receiving operation
+ * 
+ * @param op a pointer to a struct blecon_request_receive_data_op_t structure which is populated on success
+ * @param request a pointer to the relevant request structure
+ * @param user_data a pointer to user-defined data which will be associated with the operation
+ * @return true if the operation was queued successfully, or false on failure
+ */
+bool blecon_request_receive_data(
+    struct blecon_request_receive_data_op_t* op,
+    struct blecon_request_t* request,
+    void* user_data);
+
+/**
+ * @brief Get the user data associated with a receive data operation
+ * 
+ * @param op the receive data operation instance
+ * @return a pointer to the user data
+ */
+void* blecon_request_receive_data_op_get_user_data(struct blecon_request_receive_data_op_t* op);
+
+/**
+ * @brief Clean-up a request
+ * 
+ * @param request the request to clean-up
+ */
+void blecon_request_cleanup(struct blecon_request_t* request);
+
+struct blecon_t {
+    struct blecon_modem_t* modem;
+    const struct blecon_callbacks_t* callbacks;
+    void* user_data;
+
+    bool is_setup;
+    bool is_connected;
+    struct blecon_modem_info_t modem_info;
+    struct blecon_list_t requests_list;
+    blecon_request_id_t next_request_id;
+    size_t outgoing_stream_frame_queue_space_count;
+};
+
+struct blecon_request_t {
+    // Parameters
+    const struct blecon_request_parameters_t* parameters;
+    
+    // State
+    struct blecon_t* blecon;
+    blecon_request_id_t id;
+    enum blecon_request_status_code_t status_code;
+    struct {
+        bool submitted : 1;
+        bool open_sent : 1;
+        bool headers_sent : 1;
+        bool headers_received : 1;
+        bool data_sent : 1;
+        bool data_received : 1;
+        bool reset_sent : 1;
+        bool reset_received : 1;
+        bool error : 1;
+    } status;
+
+    size_t pending_receive_credits;
+
+    struct blecon_list_t send_data_ops_list;
+    struct blecon_list_t receive_data_ops_list;
+
+    struct blecon_list_node_t requests_list_node;
+};
+
+struct blecon_request_send_data_op_t {
+    struct blecon_request_t* request;
+    const uint8_t* data;
+    size_t sz;
+    bool finished;
+    void* user_data;
+    struct blecon_list_node_t send_data_ops_list_node;
+};
+
+struct blecon_request_receive_data_op_t {
+    struct blecon_request_t* request;
+    void* user_data;
+    struct blecon_list_node_t receive_data_ops_list_node;
+};
 
 #ifdef __cplusplus
 }

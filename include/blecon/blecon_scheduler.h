@@ -46,6 +46,7 @@ struct blecon_task_t {
 };
 
 void blecon_scheduler_init(struct blecon_scheduler_t* scheduler, struct blecon_event_loop_t* event_loop);
+void blecon_scheduler_cleanup(struct blecon_scheduler_t* scheduler);
 
 void blecon_scheduler_queue_task(struct blecon_task_t* task, struct blecon_scheduler_t* scheduler, blecon_task_callback_t callback, void* callback_user_data);
 void blecon_scheduler_queue_delayed_task(struct blecon_task_t* task, struct blecon_scheduler_t* scheduler, blecon_task_callback_t callback, void* callback_user_data, uint32_t timeout_ms);

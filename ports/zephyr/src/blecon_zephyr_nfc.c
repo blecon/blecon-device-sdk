@@ -11,7 +11,7 @@
 #include "blecon_zephyr_nfc.h"
 #include "blecon/blecon_memory.h"
 
-#if CONFIG_BLECON_NFC
+#if CONFIG_BLECON_PORT_NFC
 #include <nfc_t2t_lib.h>
 #include <nfc/ndef/msg.h>
 #include <nfc/ndef/uri_msg.h>
@@ -24,7 +24,7 @@ static void blecon_zephyr_nfc_set_message(struct blecon_nfc_t* nfc, const uint8_
 static void blecon_zephyr_nfc_start(struct blecon_nfc_t* nfc);
 static void blecon_zephyr_nfc_stop(struct blecon_nfc_t* nfc);
 
-#if CONFIG_BLECON_NFC
+#if CONFIG_BLECON_PORT_NFC
 #define URI_PREFIX "https://"
 
 struct blecon_zephyr_nfc_t {

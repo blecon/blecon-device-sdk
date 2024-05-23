@@ -11,7 +11,7 @@
 #include "blecon/blecon_error.h"
 #include "blecon_zephyr_aead_cipher.h"
 
-#include "zephyr/random/rand32.h"
+#include "zephyr/random/random.h"
 
 #include "psa/crypto.h"
 
@@ -22,7 +22,7 @@ static bool blecon_zephyr_crypto_generate_x25519_keypair(struct blecon_crypto_t*
 static bool blecon_zephyr_crypto_x25519_dh(struct blecon_crypto_t* crypto, const uint8_t* private_key, const uint8_t* peer_public_key, uint8_t* shared_secret);
 static bool blecon_zephyr_crypto_hkdf_sha256(struct blecon_crypto_t* crypto, const uint8_t* secret, size_t secret_sz, const uint8_t* salt, size_t salt_sz, uint8_t* output, size_t output_sz);
 static struct blecon_crypto_aead_cipher_t* blecon_zephyr_crypto_aead_cipher_new(struct blecon_crypto_t* crypto, const uint8_t* key, bool encrypt_ndecrypt);
-static bool blecon_zephyr_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, 
+static void blecon_zephyr_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, 
             const uint8_t* nonce, size_t nonce_sz, 
             const uint8_t* plaintext, size_t plaintext_sz, 
             const uint8_t* additional_data, size_t additional_data_sz,
@@ -238,7 +238,7 @@ struct blecon_crypto_aead_cipher_t* blecon_zephyr_crypto_aead_cipher_new(struct 
     return &zephyr_cipher->cipher;
 }
 
-bool blecon_zephyr_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, 
+void blecon_zephyr_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, 
             const uint8_t* nonce, size_t nonce_sz, 
             const uint8_t* plaintext, size_t plaintext_sz, 
             const uint8_t* additional_data, size_t additional_data_sz,
@@ -258,7 +258,7 @@ bool blecon_zephyr_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_
     success = true;
 
 fail:
-    return success;
+    blecon_assert( success );
 }
 
 bool blecon_zephyr_crypto_aead_cipher_dec_auth(struct blecon_crypto_aead_cipher_t* cipher, 
