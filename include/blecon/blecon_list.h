@@ -34,6 +34,10 @@ void blecon_list_push_back(struct blecon_list_t* list, struct blecon_list_node_t
 
 struct blecon_list_node_t* blecon_list_pop_front(struct blecon_list_t* list);
 
+void blecon_list_insert_after(struct blecon_list_t* list, struct blecon_list_node_t* node, struct blecon_list_node_t* previous_node);
+
+void blecon_list_insert_before(struct blecon_list_t* list, struct blecon_list_node_t* node, struct blecon_list_node_t* next_node);
+
 struct blecon_list_node_t* blecon_list_first(struct blecon_list_t* list);
 
 struct blecon_list_node_t* blecon_list_last(struct blecon_list_t* list);

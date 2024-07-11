@@ -3,9 +3,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/blecon-toolchain.cmake")
-  include(cmake/blecon-toolchain.cmake)
-endif()
+include(cmake/blecon-toolchain.cmake)
 
 project(blecon)
 
@@ -36,5 +34,13 @@ if((NOT (DEFINED ZEPHYR_BASE)) OR CONFIG_BLECON)
 
   if(BLECON_ZEPHYR_PORT)
     add_subdirectory("ports/zephyr")
+  endif()
+
+  if(BLECON_NRF5_PORT)
+    add_subdirectory("ports/nrf5")
+  endif()
+
+  if(BLECON_NRF5_EXAMPLES)
+    add_subdirectory("examples/nrf5")
   endif()
 endif()

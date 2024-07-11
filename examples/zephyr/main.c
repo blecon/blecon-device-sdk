@@ -36,10 +36,14 @@ static uint8_t _incoming_data_buffer[64] = {0};
 // Blecon callbacks
 static void example_on_connection(struct blecon_t* blecon);
 static void example_on_disconnection(struct blecon_t* blecon);
+static void example_on_time_update(struct blecon_t* blecon);
+static void example_on_ping_result(struct blecon_t* blecon);
 
 const static struct blecon_callbacks_t blecon_callbacks = {
     .on_connection = example_on_connection,
     .on_disconnection = example_on_disconnection,
+    .on_time_update = example_on_time_update,
+    .on_ping_result = example_on_ping_result
 };
 
 // Requests callbacks
@@ -92,12 +96,18 @@ void example_on_connection(struct blecon_t* blecon) {
     }
 
     // Submit request
-    blecon_request_submit(&_blecon, &_request);
+    blecon_submit_request(&_blecon, &_request);
 }
 
 void example_on_disconnection(struct blecon_t* blecon) {
     printk("Disconnected\r\n");
 }
+
+void example_on_time_update(struct blecon_t* blecon) {
+    printk("Time update\r\n");
+}
+
+void example_on_ping_result(struct blecon_t* blecon) {}
 
 void example_request_on_data_received(struct blecon_request_receive_data_op_t* receive_data_op, bool data_received, const uint8_t* data, size_t sz, bool finished) {
     // Retrieve response
@@ -210,7 +220,7 @@ int main(void)
 
     // Init request
     const static struct blecon_request_parameters_t request_params = {
-        .namespace = "blecon_util",
+        .namespace = "global:blecon_util",
         .method = "echo",
         .oneway = false,
         .request_content_type = "text/plain",

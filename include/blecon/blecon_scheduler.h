@@ -12,6 +12,7 @@ extern "C" {
 #include "stdint.h"
 #include "stdbool.h"
 #include "stddef.h"
+#include "blecon_list.h"
 #include "port/blecon_event_loop.h"
 #include "port/blecon_mutex.h"
 
@@ -21,20 +22,20 @@ struct blecon_scheduler_t {
     struct blecon_event_loop_t* event_loop;
 
     bool is_processing;
-    uint32_t last_processed_ticks;
+    // uint32_t last_processed_ticks;
 
     bool is_timeout_set;
-    uint32_t timeout_deadline_ticks;
+    uint64_t timeout_deadline;
 
     // Linked list
-    struct blecon_task_t* tasks;
+    struct blecon_list_t tasks;
     struct blecon_mutex_t* mutex;
 };
 
 typedef void (*blecon_task_callback_t)(struct blecon_task_t* task, void* user_data);
 
 struct blecon_task_t {
-    uint32_t deadline_ticks;
+    uint64_t deadline;
 
     blecon_task_callback_t callback;
     void* callback_user_data;
@@ -42,7 +43,7 @@ struct blecon_task_t {
     struct blecon_scheduler_t* scheduler;
 
     // Linked list
-    struct blecon_task_t* next;
+    struct blecon_list_node_t node;
 };
 
 void blecon_scheduler_init(struct blecon_scheduler_t* scheduler, struct blecon_event_loop_t* event_loop);

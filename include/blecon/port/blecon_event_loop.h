@@ -20,9 +20,8 @@ typedef void (*blecon_event_loop_callback_t)(struct blecon_event_loop_t* event_l
 struct blecon_event_loop_fn_t {
     void (*setup)(struct blecon_event_loop_t* event_loop);
     void (*run)(struct blecon_event_loop_t* event_loop);
-    uint32_t (*get_ticks)(struct blecon_event_loop_t* event_loop);
-    uint32_t (*ms_to_ticks)(struct blecon_event_loop_t* event_loop, uint32_t ms);
-    void (*set_timeout)(struct blecon_event_loop_t* event_loop, uint32_t ticks);
+    uint64_t (*get_monotonic_time)(struct blecon_event_loop_t* event_loop);
+    void (*set_timeout)(struct blecon_event_loop_t* event_loop, uint32_t timeout_ms);
     void (*cancel_timeout)(struct blecon_event_loop_t* event_loop);
     void (*signal)(struct blecon_event_loop_t* event_loop);
     void (*lock)(struct blecon_event_loop_t* event_loop);
@@ -51,16 +50,12 @@ static inline void blecon_event_loop_run(struct blecon_event_loop_t* event_loop)
     event_loop->fns->run(event_loop);
 }
 
-static inline uint32_t blecon_event_loop_get_ticks(struct blecon_event_loop_t* event_loop) {
-    return event_loop->fns->get_ticks(event_loop);
+static inline uint64_t blecon_event_loop_get_monotonic_time(struct blecon_event_loop_t* event_loop) {
+    return event_loop->fns->get_monotonic_time(event_loop);
 }
 
-static inline uint32_t blecon_event_loop_ms_to_ticks(struct blecon_event_loop_t* event_loop, uint32_t ms) {
-    return event_loop->fns->ms_to_ticks(event_loop, ms);
-}
-
-static inline void blecon_event_loop_set_timeout(struct blecon_event_loop_t* event_loop, uint32_t ticks) {
-    event_loop->fns->set_timeout(event_loop, ticks);
+static inline void blecon_event_loop_set_timeout(struct blecon_event_loop_t* event_loop, uint32_t timeout_ms) {
+    event_loop->fns->set_timeout(event_loop, timeout_ms);
 }
 
 static inline void blecon_event_loop_cancel_timeout(struct blecon_event_loop_t* event_loop) {

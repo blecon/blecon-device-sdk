@@ -28,6 +28,21 @@ elseif(DEFINED ZEPHYR_BASE)
     endif()
 
     set(BLECON_ARCHITECTURE ${ARCHITECTURE}_${FLOAT_ABI}-zephyr  CACHE STRING "ABI")
+elseif(DEFINED BLECON_NRF5_TARGET)
+    # If targetting the nRF5 SDK
+    if(CPU STREQUAL "CORTEX_M4" OR CPU STREQUAL "CORTEX_M4F")
+        set(ARCHITECTURE armv7em)
+    else()
+        message(FATAL_ERROR "Unsupported architecture")
+    endif()
+
+    if(CPU STREQUAL "CORTEX_M4F")
+        set(FLOAT_ABI hard)
+    else()
+        set(FLOAT_ABI soft)
+    endif()
+
+    set(BLECON_ARCHITECTURE ${ARCHITECTURE}_${FLOAT_ABI}-gnu  CACHE STRING "ABI")
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
@@ -39,6 +54,8 @@ endif()
 # armv8m-main_soft-zephyr
 # armv8m-main_softfp-zephyr
 # armv8m-main_hard-zephyr
+# armv7em_soft-gnu
+# armv7em_softfp-gnu
 # aarch64-linux-gnu
 # x86_64-linux-gnu
 set_target_properties(blecon PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/${BLECON_ARCHITECTURE}/libblecon.a)

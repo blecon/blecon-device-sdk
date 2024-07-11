@@ -120,7 +120,7 @@ size_t blecon_zephyr_l2cap_bearer_mtu(struct blecon_bearer_t* bearer, void* user
 
     // The MTU we return is the MPS (maximum PDU size) minus two (L2CAP header size)
     // This will ensure that any SDU sent is not fragmented across multiple PDUs
-    return l2cap_bearer->l2cap_chan.tx.mps - 2;
+    return MIN(l2cap_bearer->l2cap_chan.tx.mps - 2, BLECON_L2CAP_MTU);
 }
 
 void blecon_zephyr_l2cap_bearer_send(struct blecon_bearer_t* bearer, struct blecon_buffer_t buf, void* user_data) {
@@ -137,7 +137,13 @@ void blecon_zephyr_l2cap_bearer_send(struct blecon_bearer_t* bearer, struct blec
 	net_buf_add_mem(z_buf, buf.data, buf.sz);
 
     int ret = bt_l2cap_chan_send(&l2cap_bearer->l2cap_chan.chan, z_buf);
-    blecon_assert( ret == buf.sz ); // Zephyr now returns the number of bytes sent
+
+    if (ret == -ENOTCONN) {
+        // Other end closing the connection is not an error
+    }
+    else {
+        blecon_assert( ret == buf.sz ); // Zephyr now returns the number of bytes sent
+    }
 
     blecon_buffer_free(buf);
 }

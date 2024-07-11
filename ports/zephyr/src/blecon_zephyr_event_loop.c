@@ -24,9 +24,8 @@ struct blecon_zephyr_event_loop_t;
 
 static void blecon_zephyr_event_loop_setup(struct blecon_event_loop_t* event_loop);
 static void blecon_zephyr_event_loop_run(struct blecon_event_loop_t* event_loop);
-static uint32_t blecon_zephyr_event_loop_get_ticks(struct blecon_event_loop_t* event_loop);
-static uint32_t blecon_zephyr_event_loop_ms_to_ticks(struct blecon_event_loop_t* event_loop, uint32_t ms);
-static void blecon_zephyr_event_loop_set_timeout(struct blecon_event_loop_t* event_loop, uint32_t ticks);
+static uint64_t blecon_zephyr_event_loop_get_monotonic_time(struct blecon_event_loop_t* event_loop);
+static void blecon_zephyr_event_loop_set_timeout(struct blecon_event_loop_t* event_loop, uint32_t timeout_ms);
 static void blecon_zephyr_event_loop_cancel_timeout(struct blecon_event_loop_t* event_loop);
 static void blecon_zephyr_event_loop_signal(struct blecon_event_loop_t* event_loop);
 static void blecon_zephyr_event_loop_lock(struct blecon_event_loop_t* event_loop);
@@ -52,8 +51,7 @@ struct blecon_event_loop_t* blecon_zephyr_event_loop_new(void) {
     static const struct blecon_event_loop_fn_t event_loop_fn = {
         .setup = blecon_zephyr_event_loop_setup,
         .run = blecon_zephyr_event_loop_run,
-        .get_ticks = blecon_zephyr_event_loop_get_ticks,
-        .ms_to_ticks = blecon_zephyr_event_loop_ms_to_ticks,
+        .get_monotonic_time = blecon_zephyr_event_loop_get_monotonic_time,
         .set_timeout = blecon_zephyr_event_loop_set_timeout,
         .cancel_timeout = blecon_zephyr_event_loop_cancel_timeout,
         .signal = blecon_zephyr_event_loop_signal,
@@ -143,27 +141,17 @@ void blecon_zephyr_event_loop_run(struct blecon_event_loop_t* event_loop) {
     }
 }
 
-uint32_t blecon_zephyr_event_loop_get_ticks(struct blecon_event_loop_t* event_loop) {
+uint64_t blecon_zephyr_event_loop_get_monotonic_time(struct blecon_event_loop_t* event_loop) {
     struct blecon_zephyr_event_loop_t* zephyr_event_loop = (struct blecon_zephyr_event_loop_t*) event_loop;
     (void)zephyr_event_loop;
 
-    int64_t now = k_uptime_get();
-
-    uint32_t ticks = (uint32_t)((uint64_t)now & (uint64_t)(~(uint32_t)0));
-    return ticks;
+    return (uint64_t)k_uptime_get();
 }
 
-uint32_t blecon_zephyr_event_loop_ms_to_ticks(struct blecon_event_loop_t* event_loop, uint32_t ms) {
-    struct blecon_zephyr_event_loop_t* zephyr_event_loop = (struct blecon_zephyr_event_loop_t*) event_loop;
-    (void)zephyr_event_loop;
-
-    return ms;
-}
-
-void blecon_zephyr_event_loop_set_timeout(struct blecon_event_loop_t* event_loop, uint32_t ticks) {
+void blecon_zephyr_event_loop_set_timeout(struct blecon_event_loop_t* event_loop, uint32_t timeout_ms) {
     struct blecon_zephyr_event_loop_t* zephyr_event_loop = (struct blecon_zephyr_event_loop_t*) event_loop;
 
-    k_timer_start(&zephyr_event_loop->z_timer, K_MSEC(ticks), K_FOREVER);
+    k_timer_start(&zephyr_event_loop->z_timer, K_MSEC(timeout_ms), K_FOREVER);
 }
 
 void blecon_zephyr_event_loop_cancel_timeout(struct blecon_event_loop_t* event_loop) {
