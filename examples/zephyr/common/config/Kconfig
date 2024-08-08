@@ -1,0 +1,10 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+config LARGE_REQUEST_EXAMPLE_BUFFER_SZ
+    int "Buffer size for large request example"
+    default 32768
+
+menu "Zephyr Kernel"
+source "Kconfig.zephyr"
+endmenu

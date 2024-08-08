@@ -1,6 +1,6 @@
-# nRF5 SDK Example
+# nRF5 SDK Examples
 
-This example demonstrates how to use Blecon with the legacy nRF5 SDK.
+These examples demonstrates how to use Blecon with the legacy nRF5 SDK.
 
 ## Compilation
 
@@ -12,7 +12,9 @@ $ mkdir build && cd build
 $ cmake --fresh -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBLECON_NRF5_PORT=ON -DBLECON_NRF5_BOARD=NRF52840_DK ..
 ```
 
-The example uses the S140 Softdevice which needs to be flashed as well. It is downloaded as part of the build process and located in `examples/nrf5/nrf5-sdk/nrf5-sdk/components/softdevice/s140/hex/s140_nrf52_7.2.0_softdevice.hex` within your build directory.
+The example uses the S140 (nRF52840) or S113 (nRF52833) Softdevice which needs to be flashed as well. It is downloaded as part of the build process and located within your build directory:
+* `examples/nrf5/nrf5-sdk/nrf5-sdk/components/softdevice/s140/hex/s140_nrf52_7.2.0_softdevice.hex`
+* `examples/nrf5/nrf5-sdk/nrf5-sdk/components/softdevice/s113/hex/s113_nrf52_7.2.0_softdevice.hex`
 
 ## nRF5 SDK
 

@@ -3,14 +3,6 @@
 
 if(CONFIG_BLECON)
 
-if(EXISTS  "${CMAKE_CURRENT_SOURCE_DIR}/blecon_zephyr-extra.cmake")
-  set(BLECON_ZEPHYR_HAS_EXTRA TRUE)
-else()
-  set(BLECON_ZEPHYR_HAS_EXTRA FALSE)
-endif()
-
-cmake_dependent_option(BLECON_ZEPHYR_EXTRA "Compile extra Zephyr port" ON "BLECON_ZEPHYR_HAS_EXTRA" OFF)
-
 add_library(blecon_zephyr STATIC)
 
 target_sources(blecon_zephyr PRIVATE
@@ -55,10 +47,6 @@ if(CONFIG_BLECON_PORT_UART)
 target_sources(blecon_zephyr PRIVATE
   src/blecon_zephyr_ext_modem_uart_transport.c
 )
-endif()
-
-if(BLECON_ZEPHYR_EXTRA)
-include(blecon_zephyr-extra.cmake)
 endif()
 
 target_link_libraries(blecon_zephyr PRIVATE blecon)

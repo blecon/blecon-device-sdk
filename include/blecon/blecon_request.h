@@ -74,11 +74,11 @@ struct blecon_request_callbacks_t {
  */
 struct blecon_request_parameters_t {
     bool oneway; ///< If true, the request is one-way (no response expected)
-    const char* namespace; ///< The namespace of this request's event type
-    const char* method; ///< The method of this request's event type
-    const char* request_content_type; ///< The content type of the request (e.g. application/cbor)
-    const char* response_content_type; ///< The expected content type of the response (e.g. application/cbor)
-    size_t response_mtu; ///< The maximum size of a response data frame (for a single data operation)
+    const char* namespace; ///< The namespace of this request's event type (maximum BLECON_NAMESPACE_MAX_SZ characters, including null terminator) or NULL
+    const char* method; ///< The method of this request's event type (maximum BLECON_METHOD_MAX_SZ characters, including null terminator) or NULL
+    const char* request_content_type; ///< The content type of the request (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
+    const char* response_content_type; ///< The expected content type of the response (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
+    size_t response_mtu; ///< The maximum size of a response data frame (for a single data operation, maximum BLECON_MTU)
     const struct blecon_request_callbacks_t* callbacks; ///< The callbacks to use for this request
     void* user_data; ///< User data to pass to the callbacks
 };
@@ -113,7 +113,7 @@ enum blecon_request_status_code_t blecon_request_get_status(struct blecon_reques
  * @param op a pointer to a struct blecon_request_send_data_op_t structure which is populated on success
  * @param request a pointer to the relevant request structure
  * @param data the data to send
- * @param sz the size of the data buffer
+ * @param sz the size of the data buffer (maximum BLECON_MTU)
  * @param finished a flag indicating if this is the end of the data
  * @param user_data a pointer to user-defined data which will be associated with the operation
  * @return true if the operation was queued successfully, or false on failure

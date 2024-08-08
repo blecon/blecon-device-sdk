@@ -369,12 +369,23 @@ if(NORDIC_TARGET_SUPPORTS_CRYPTOCELL)
     )
 endif()
 
-separate_arguments(NRFJPROG_CMD UNIX_COMMAND PROGRAM SEPARATE_ARGS "nrfjprog $ENV{NRFJPROG_OPTIONS}")
+if(DEFINED ENV{BLECON_JLINK_REMOTE_SERVER_IP})
+    set(NRFJPROG_OPTIONS "--ip $ENV{BLECON_JLINK_REMOTE_SERVER_IP}")
+    set(JLINK_GDB_SERVER_OPTIONS "-select ip=$ENV{BLECON_JLINK_REMOTE_SERVER_IP}")
+else()
+    set(NRFJPROG_OPTIONS "")
+    set(JLINK_GDB_SERVER_OPTIONS "")
+endif()
+
+separate_arguments(NRFJPROG_CMD UNIX_COMMAND PROGRAM SEPARATE_ARGS "nrfjprog ${NRFJPROG_OPTIONS}")
 set(NRFJPROG "${NRFJPROG_CMD}" CACHE INTERNAL "")
+
+separate_arguments(JLINK_GDB_SERVER_CMD UNIX_COMMAND PROGRAM SEPARATE_ARGS "JLinkGDBServer ${JLINK_GDB_SERVER_OPTIONS}")
+set(JLINK_GDB_SERVER "${JLINK_GDB_SERVER_CMD}" CACHE INTERNAL "")
 
 add_custom_target(flash_softdevice 
     COMMAND echo Flashing: ${NORDIC_SOFTDEVICE_FILENAME}
-    COMMAND ${NRFJPROG} -f nrf52 --program \"${NORDIC_NRF5_SDK_ROOT}/components/softdevice/${NORDIC_SOFTDEVICE_LOWERCASE}/hex/${NORDIC_SOFTDEVICE_FILENAME}\" --sectorerase
+    COMMAND ${NRFJPROG} -f nrf52 --program \"${NORDIC_NRF5_SDK_ROOT}/components/softdevice/${NORDIC_SOFTDEVICE_LOWERCASE}/hex/${NORDIC_SOFTDEVICE_FILENAME}\" --sectorerase --verify --fast
     COMMAND ${NRFJPROG} -f nrf52 --reset
 )
 
@@ -393,7 +404,7 @@ COMMAND echo Erasing device
 # JLink GDB Server
 add_custom_target(gdb_server
     COMMAND echo Starting JLink GDB Server
-    COMMAND JLinkGDBServer -device ${BLECON_NRF5_TARGET} -if swd -speed auto -ExitOnError
+    COMMAND ${JLINK_GDB_SERVER} -device ${BLECON_NRF5_TARGET} -if swd -speed auto -ExitOnError
 )
 
 # Configure target as NRF5 app
@@ -597,7 +608,7 @@ function(nrf5_app TARGET)
     add_custom_target(${TARGET_FLASH} 
         COMMAND echo Flashing ${TARGET_HEX}
         COMMAND ${NRFJPROG} -f nrf52 --halt
-        COMMAND ${NRFJPROG} -f nrf52 --program "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_HEX}" --sectorerase
+        COMMAND ${NRFJPROG} -f nrf52 --program "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_HEX}" --sectorerase --verify --fast
         COMMAND ${NRFJPROG} -f nrf52 --reset
         DEPENDS ${TARGET}
         VERBATIM

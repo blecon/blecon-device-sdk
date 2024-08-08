@@ -30,6 +30,9 @@ config BLECON_EXTERNAL_MODEM
     select BLECON_PORT_EVENT_LOOP
     select BLECON_PORT_UART
 
+config BLECON_NO_MODEM
+    bool "No modem"
+
 endchoice
 
 config BLECON_INTERNAL_MODEM_NFC
@@ -95,9 +98,9 @@ config BLECON_PORT_EVENT_LOOP
 
 config BLECON_PORT_NFC
     bool "Blecon NFC port"
-    depends on HAS_HW_NRF_NFCT
     default n
     depends on NFC_T2T_NRFXLIB
+    depends on NFC_NDEF
     depends on NFC_NDEF_MSG
     depends on NFC_NDEF_URI_MSG
     depends on NFC_NDEF_RECORD

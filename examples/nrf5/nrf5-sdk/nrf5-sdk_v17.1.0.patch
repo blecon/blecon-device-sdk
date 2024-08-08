@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 --- a/components/libraries/crypto/backend/oberon/oberon_backend_chacha_poly_aead.c
 +++ b/components/libraries/crypto/backend/oberon/oberon_backend_chacha_poly_aead.c
-@@ -85,7 +85,7 @@ static ret_code_t backend_cc310_crypt(void * const           p_context,
+@@ -85,11 +85,6 @@ static ret_code_t backend_cc310_crypt(void * const           p_context,
      nrf_crypto_backend_chacha_poly_context_t * p_ctx =
          (nrf_crypto_backend_chacha_poly_context_t *)p_context;
  
 -    if ((adata_size == 0) || (data_in_size == 0))
-+    if (/*(/adata_size == 0) ||*/ (data_in_size == 0))
+-    {
+-        return NRF_ERROR_CRYPTO_INPUT_LENGTH;
+-    }
+-
+     if (mac_size   != NRF_CRYPTO_CHACHA_POLY_MAC_SIZE)
      {
-         return NRF_ERROR_CRYPTO_INPUT_LENGTH;
-     }
-
+         return NRF_ERROR_CRYPTO_AEAD_MAC_SIZE;
