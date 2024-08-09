@@ -205,6 +205,7 @@ int main(void)
 #else
     #error "No modem implementation selected - please enable a Blecon modem implementation in prj.conf"
 #endif
+    blecon_assert(modem != NULL); // Make sure allocation was successful
 
     // Register event ids for shell commands
     _cmd_blecon_connection_initiate_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, cmd_blecon_connection_initiate_event, NULL);
