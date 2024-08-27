@@ -75,7 +75,7 @@ static void blecon_nrf5_bluetooth_advertising_set_data(
 static bool blecon_nrf5_bluetooth_advertising_start(struct blecon_bluetooth_t* bluetooth, uint32_t adv_interval_ms);
 static void blecon_nrf5_bluetooth_advertising_stop(struct blecon_bluetooth_t* bluetooth);
 static void blecon_nrf5_bluetooth_rotate_mac_address(struct blecon_bluetooth_t* bluetooth);
-static void blecon_nrf5_bluetooth_get_mac_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_mac_addr);
+static void blecon_nrf5_bluetooth_get_mac_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_addr);
 static void blecon_nrf5_bluetooth_disconnect(struct blecon_bluetooth_t* bluetooth);
 
 struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
@@ -94,9 +94,9 @@ struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
         .l2cap_server_new = blecon_nrf5_bluetooth_l2cap_server_new,
         .l2cap_server_as_bearer = blecon_nrf5_bluetooth_l2cap_server_as_bearer,
         .l2cap_server_free = blecon_nrf5_bluetooth_l2cap_server_free,
-        .gatts_bearer_new = blecon_nrf5_bluetooth_gatts_bearer_new,
-        .gatts_bearer_as_bearer = blecon_nrf5_bluetooth_gatts_bearer_as_bearer,
-        .gatts_bearer_free = blecon_nrf5_bluetooth_gatts_bearer_free
+        .gatts_bearer_new = blecon_nrf5_bluetooth_gatt_server_bearer_new,
+        .gatts_bearer_as_bearer = blecon_nrf5_bluetooth_gatt_server_bearer_as_bearer,
+        .gatts_bearer_free = blecon_nrf5_bluetooth_gatt_server_bearer_free
     };
 
     blecon_bluetooth_init(&_nrf5_bluetooth.bluetooth, &bluetooth_fn);
@@ -105,7 +105,7 @@ struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
     _nrf5_bluetooth.conn_phy = blecon_bluetooth_phy_1m;
     _nrf5_bluetooth.advertising = false;
 
-    blecon_nrf5_bluetooth_gatts_init(&_nrf5_bluetooth);
+    blecon_nrf5_bluetooth_gatt_server_init(&_nrf5_bluetooth);
 
     return &_nrf5_bluetooth.bluetooth;
 }
@@ -129,7 +129,7 @@ void blecon_nrf5_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
     conn_params_init();
 
     // Initialize GATT server module
-    blecon_nrf5_bluetooth_gatts_setup(nrf5_bluetooth);
+    blecon_nrf5_bluetooth_gatt_server_setup(nrf5_bluetooth);
     
     // Create timer
     ret_code_t err_code = app_timer_create(&_timer_id,
@@ -226,11 +226,11 @@ void blecon_nrf5_bluetooth_rotate_mac_address(struct blecon_bluetooth_t* bluetoo
     new_address->addr[5] |= 0xc0; // Random static address
 }
 
-void blecon_nrf5_bluetooth_get_mac_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_mac_addr) {
+void blecon_nrf5_bluetooth_get_mac_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_addr) {
     ble_gap_addr_t adv_addr;
     sd_ble_gap_addr_get(&adv_addr);
-    bt_mac_addr->addr_type = adv_addr.addr_type;
-    memcpy(bt_mac_addr->bytes, &adv_addr.addr[0], BLECON_BLUETOOTH_ADDR_SZ);
+    bt_addr->addr_type = adv_addr.addr_type;
+    memcpy(bt_addr->bytes, &adv_addr.addr[0], BLECON_BLUETOOTH_ADDR_SZ);
 }
 
 void blecon_nrf5_bluetooth_disconnect(struct blecon_bluetooth_t* bluetooth) {

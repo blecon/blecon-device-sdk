@@ -62,6 +62,11 @@ struct blecon_callbacks_t {
      * @param blecon the blecon instance
      */
     void (*on_ping_result)(struct blecon_t* blecon);
+
+    /**
+     * @brief Called when a raw scan completed.
+     */
+    void (*on_scan_complete)(struct blecon_t* blecon);
 };
 
 /** 
@@ -253,6 +258,41 @@ bool blecon_ping_cancel(struct blecon_t* blecon);
 bool blecon_ping_get_latency(struct blecon_t* blecon, bool* latency_available, uint32_t* connection_latency_ms, uint32_t* round_trip_latency_ms);
 
 /**
+ * @brief Start a peer scanning session
+ * 
+ * @param blecon the blecon instance
+ * @param peer_scan true to report peer devices
+ * @param raw_scan true to report raw advertising data
+ * @param duration_ms the duration of the scan in milliseconds
+ * @return true on success, or false on failure
+ */
+bool blecon_scan_start(struct blecon_t* blecon, bool peer_scan, bool raw_scan, uint32_t duration_ms);
+
+/**
+ * @brief Stop the current peer scanning session
+ * 
+ * @param blecon the blecon instance
+ * @return true on success, or false on failure
+ */
+bool blecon_scan_stop(struct blecon_t* blecon);
+
+/**
+ * @brief Get the data from the last peer scan
+ * 
+ * @param blecon the blecon instance
+ * 
+ * @param peer_report_iterator a function to call for each peer device report; if NULL, no peer device reports are returned
+ * @param raw_report_iterator a function to call for each raw advertising data report; if NULL, no raw advertising data reports are returned
+ * @param overflow a pointer to a bool which is set to true if the scan data buffer overflowed
+ * @param user_data user data to pass to the report iterator callbacks
+ * @return true on success, or false on failure
+ */
+bool blecon_scan_get_data(struct blecon_t* blecon, 
+    void (*peer_scan_report_iterator)(const struct blecon_modem_peer_scan_report_t* report, void* user_data), 
+    void (*raw_scan_report_iterator)(const struct blecon_modem_raw_scan_report_t* report, void* user_data),
+    bool* overflow, void* user_data);
+
+/**
  * @brief Submit a request for processing
  * 
  * @param blecon the blecon instance
@@ -279,6 +319,9 @@ struct blecon_t {
     struct blecon_request_processor_t request_processor;
     struct blecon_request_processor_client_t request_processor_client;
     size_t outgoing_request_frame_queue_space_count;
+    void (*peer_scan_report_iterator)(const struct blecon_modem_peer_scan_report_t*, void*);
+    void (*raw_scan_report_iterator)(const struct blecon_modem_raw_scan_report_t*, void*);
+    void* iterators_user_data;
 };
 
 #ifdef __cplusplus

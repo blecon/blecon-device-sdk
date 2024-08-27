@@ -13,7 +13,9 @@ extern "C" {
 #include "stdint.h"
 #include "stddef.h"
 
-#include "blecon_request_frame.h"
+#include "blecon/blecon_request_frame.h"
+#include "blecon/blecon_defs.h"
+#include "blecon/blecon_bluetooth_types.h"
 #include "blecon/port/blecon_event_loop.h"
 
 struct blecon_modem_t;
@@ -51,6 +53,22 @@ struct blecon_modem_info_t {
     uint32_t firmware_version; ///< The modem's firmware version
 };
 
+struct blecon_modem_raw_scan_report_t {
+    struct blecon_bluetooth_addr_t bt_addr;
+    int8_t tx_power;
+    int8_t rssi;
+    uint8_t sid;
+    const uint8_t* adv_data;
+    size_t adv_data_sz;
+};
+
+struct blecon_modem_peer_scan_report_t {
+    uint8_t blecon_id[BLECON_UUID_SZ];
+    bool is_announcing : 1;
+    int8_t tx_power;
+    int8_t rssi;
+};
+
 // Callbacks
 struct blecon_modem_callbacks_t {
     void (*on_connection)(struct blecon_modem_t* modem, void* user_data);
@@ -60,6 +78,9 @@ struct blecon_modem_callbacks_t {
     uint8_t* (*incoming_frame_data_buffer_alloc)(size_t sz, uint16_t request_id, void* user_data);
     void (*on_time_update)(struct blecon_modem_t* modem, void* user_data);
     void (*on_ping_result)(struct blecon_modem_t* modem, void* user_data);
+    void (*peer_scan_report)(struct blecon_modem_t* modem, const struct blecon_modem_peer_scan_report_t* report, void* user_data);
+    void (*raw_scan_report)(struct blecon_modem_t* modem, const struct blecon_modem_raw_scan_report_t* report, void* user_data);
+    void (*on_scan_complete)(struct blecon_modem_t* modem, void* user_data);
 };
 
 // Implementation
@@ -86,6 +107,10 @@ struct blecon_modem_fn_t {
     enum blecon_ret_t (*ping_perform)(struct blecon_modem_t* modem, uint32_t timeout_ms);
     enum blecon_ret_t (*ping_cancel)(struct blecon_modem_t* modem);
     enum blecon_ret_t (*ping_get_latency)(struct blecon_modem_t* modem, bool* latency_available, uint32_t* connection_latency_ms, uint32_t* round_trip_latency_ms);
+
+    enum blecon_ret_t (*scan_start)(struct blecon_modem_t* modem, bool peer_scan, bool raw_scan, uint32_t duration_ms);
+    enum blecon_ret_t (*scan_stop)(struct blecon_modem_t* modem);
+    enum blecon_ret_t (*scan_get_data)(struct blecon_modem_t* modem, bool* overflow);
 };
 
 struct blecon_modem_t {
@@ -123,6 +148,10 @@ enum blecon_ret_t blecon_modem_ping_perform(struct blecon_modem_t* modem, uint32
 enum blecon_ret_t blecon_modem_ping_cancel(struct blecon_modem_t* modem);
 enum blecon_ret_t blecon_modem_ping_get_latency(struct blecon_modem_t* modem, bool* latency_available, uint32_t* connection_latency_ms, uint32_t* round_trip_latency_ms);
 
+enum blecon_ret_t blecon_modem_scan_start(struct blecon_modem_t* modem, bool peer_scan, bool raw_scan, uint32_t duration_ms);
+enum blecon_ret_t blecon_modem_scan_get_data(struct blecon_modem_t* modem, bool* overflow);
+enum blecon_ret_t blecon_modem_scan_stop(struct blecon_modem_t* modem);
+
 void blecon_modem_on_connection(struct blecon_modem_t* modem);
 void blecon_modem_on_disconnection(struct blecon_modem_t* modem);
 void blecon_modem_on_outgoing_frame_queue_has_space(struct blecon_modem_t* modem);
@@ -130,6 +159,9 @@ void blecon_modem_on_incoming_frame_queue_has_data(struct blecon_modem_t* modem)
 uint8_t* blecon_modem_incoming_frame_data_buffer_alloc(struct blecon_modem_t* modem, uint16_t request_id, size_t sz);
 void blecon_modem_on_time_update(struct blecon_modem_t* modem);
 void blecon_modem_on_ping_result(struct blecon_modem_t* modem);
+void blecon_modem_peer_scan_report(struct blecon_modem_t* modem, const struct blecon_modem_peer_scan_report_t* report);
+void blecon_modem_raw_scan_report(struct blecon_modem_t* modem, const struct blecon_modem_raw_scan_report_t* report);
+void blecon_modem_on_scan_complete(struct blecon_modem_t* modem);
 
 #ifdef __cplusplus
 }

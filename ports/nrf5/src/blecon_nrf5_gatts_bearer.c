@@ -28,7 +28,7 @@ NRF_SDH_BLE_OBSERVER(blecon_nrf5_gatts_bearer_sdh_ble_obs, \
                      2 /* prio */,                 \
                      blecon_nrf5_gatts_bearer_on_ble_evt, NULL /* context not used */);
 
-void blecon_nrf5_bluetooth_gatts_init(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
+void blecon_nrf5_bluetooth_gatt_server_init(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
     memset(&nrf5_bluetooth->gatts.bearers, 0, sizeof(nrf5_bluetooth->gatts.bearers));
     nrf5_bluetooth->gatts.bearers_count = 0;
     nrf5_bluetooth->gatts.service_handle = 0;
@@ -40,7 +40,7 @@ void blecon_nrf5_bluetooth_gatts_init(struct blecon_nrf5_bluetooth_t* nrf5_bluet
     _nrf5_bluetooth = nrf5_bluetooth;
 }
 
-void blecon_nrf5_bluetooth_gatts_setup(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
+void blecon_nrf5_bluetooth_gatt_server_setup(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
     // Register base UUID for GATT characteristics
     ble_uuid128_t base_uuid = { .uuid128 = { BLECON_UUID_ENDIANNESS_SWAP(BLECON_BASE_GATT_SERVICE_UUID) } };
     ret_code_t err_code = sd_ble_uuid_vs_add(&base_uuid, &nrf5_bluetooth->gatts.base_service_characteristics_uuid);
@@ -53,7 +53,7 @@ void blecon_nrf5_bluetooth_gatts_setup(struct blecon_nrf5_bluetooth_t* nrf5_blue
     blecon_assert(err_code == NRF_SUCCESS);
 }
 
-struct blecon_bluetooth_gatts_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_new(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid) {
+struct blecon_bluetooth_gatt_server_bearer_t* blecon_nrf5_bluetooth_gatt_server_bearer_new(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid) {
     struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
     struct blecon_nrf5_gatts_t* nrf5_gatts = &nrf5_bluetooth->gatts;
 
@@ -93,12 +93,12 @@ struct blecon_bluetooth_gatts_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_new(s
     return &nrf5_gatts_bearer->gatts_bearer;
 }
 
-struct blecon_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_as_bearer(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer) {
+struct blecon_bearer_t* blecon_nrf5_bluetooth_gatt_server_bearer_as_bearer(struct blecon_bluetooth_gatt_server_bearer_t* gatts_bearer) {
     struct blecon_nrf5_gatts_bearer_t* nrf5_gatts_bearer = (struct blecon_nrf5_gatts_bearer_t*)gatts_bearer;
     return &nrf5_gatts_bearer->bearer;
 }
 
-void blecon_nrf5_bluetooth_gatts_bearer_free(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer) {
+void blecon_nrf5_bluetooth_gatt_server_bearer_free(struct blecon_bluetooth_gatt_server_bearer_t* gatts_bearer) {
     blecon_fatal_error(); // Dynamic creation of GATTS bearers not supported on this platform
 }
 
