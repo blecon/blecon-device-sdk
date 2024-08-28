@@ -41,6 +41,11 @@ config BLECON_INTERNAL_MODEM_NFC
     depends on BLECON_INTERNAL_MODEM
     select BLECON_PORT_NFC
 
+config BLECON_INTERNAL_MODEM_SCAN_BUFFER_SIZE
+    int "Blecon internal modem scan buffer size"
+    default 1024
+    depends on BLECON_INTERNAL_MODEM
+
 config BLECON_EXTERNAL_MODEM_UART_TRANSPORT_RX_FIFO_SZ
     int "Blecon external modem UART RX FIFO size"
     default 256

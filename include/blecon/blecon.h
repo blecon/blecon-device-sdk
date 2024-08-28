@@ -64,7 +64,14 @@ struct blecon_callbacks_t {
     void (*on_ping_result)(struct blecon_t* blecon);
 
     /**
-     * @brief Called when a raw scan completed.
+     * @brief Called when a scan report is available.
+     * @param blecon the blecon instance
+     */
+    void (*on_scan_report)(struct blecon_t* blecon);
+
+    /**
+     * @brief Called when a scan completed.
+     * @param blecon the blecon instance
      */
     void (*on_scan_complete)(struct blecon_t* blecon);
 };
@@ -77,6 +84,7 @@ struct blecon_callbacks_t {
  * @param crypto a platform-specific crypto instance
  * @param nvm a platform-specific nvm instance
  * @param nfc a platform-specific nfc instance
+ * @param scan_buffer_size the size of the scan buffer
  * @param allocator a function to allocate memory
  * @return a pointer to a struct blecon_modem_t instance
  * */
@@ -86,6 +94,7 @@ struct blecon_modem_t* blecon_int_modem_create(
     struct blecon_crypto_t* crypto,
     struct blecon_nvm_t* nvm,
     struct blecon_nfc_t* nfc,
+    size_t scan_buffer_size,
     void* (*allocator)(size_t)
 );
 
@@ -281,8 +290,8 @@ bool blecon_scan_stop(struct blecon_t* blecon);
  * 
  * @param blecon the blecon instance
  * 
- * @param peer_report_iterator a function to call for each peer device report; if NULL, no peer device reports are returned
- * @param raw_report_iterator a function to call for each raw advertising data report; if NULL, no raw advertising data reports are returned
+ * @param peer_scan_report_iterator a function to call for each peer device report; if NULL, no peer device reports are returned
+ * @param raw_scan_report_iterator a function to call for each raw advertising data report; if NULL, no raw advertising data reports are returned
  * @param overflow a pointer to a bool which is set to true if the scan data buffer overflowed
  * @param user_data user data to pass to the report iterator callbacks
  * @return true on success, or false on failure

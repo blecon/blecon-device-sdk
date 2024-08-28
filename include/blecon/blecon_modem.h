@@ -80,6 +80,7 @@ struct blecon_modem_callbacks_t {
     void (*on_ping_result)(struct blecon_modem_t* modem, void* user_data);
     void (*peer_scan_report)(struct blecon_modem_t* modem, const struct blecon_modem_peer_scan_report_t* report, void* user_data);
     void (*raw_scan_report)(struct blecon_modem_t* modem, const struct blecon_modem_raw_scan_report_t* report, void* user_data);
+    void (*on_scan_report)(struct blecon_modem_t* modem, void* user_data);
     void (*on_scan_complete)(struct blecon_modem_t* modem, void* user_data);
 };
 
@@ -161,6 +162,7 @@ void blecon_modem_on_time_update(struct blecon_modem_t* modem);
 void blecon_modem_on_ping_result(struct blecon_modem_t* modem);
 void blecon_modem_peer_scan_report(struct blecon_modem_t* modem, const struct blecon_modem_peer_scan_report_t* report);
 void blecon_modem_raw_scan_report(struct blecon_modem_t* modem, const struct blecon_modem_raw_scan_report_t* report);
+void blecon_modem_on_scan_report(struct blecon_modem_t* modem);
 void blecon_modem_on_scan_complete(struct blecon_modem_t* modem);
 
 #ifdef __cplusplus

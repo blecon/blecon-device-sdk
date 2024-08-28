@@ -9,6 +9,7 @@ target_sources(blecon_zephyr PRIVATE
   src/blecon_zephyr_mutex.c
   src/blecon_zephyr_misc.c
   src/blecon_zephyr_error.c
+  src/blecon_zephyr.c
 )
 
 if(CONFIG_BLECON_PORT_EVENT_LOOP)

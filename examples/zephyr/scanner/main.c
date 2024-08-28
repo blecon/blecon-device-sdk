@@ -14,17 +14,8 @@
 #include "blecon/blecon.h"
 #include "blecon/blecon_error.h"
 #include "blecon/blecon_util.h"
-
-#if defined(CONFIG_BLECON_INTERNAL_MODEM)
+#include "blecon_zephyr/blecon_zephyr.h"
 #include "blecon_zephyr/blecon_zephyr_event_loop.h"
-#include "blecon_zephyr/blecon_zephyr_bluetooth.h"
-#include "blecon_zephyr/blecon_zephyr_crypto.h"
-#include "blecon_zephyr/blecon_zephyr_nvm.h"
-#include "blecon_zephyr/blecon_zephyr_nfc.h"
-#elif defined(CONFIG_BLECON_EXTERNAL_MODEM)
-#include "blecon_zephyr/blecon_zephyr_event_loop.h"
-#include "blecon_zephyr/blecon_zephyr_ext_modem_uart_transport.h"
-#endif
 
 static struct blecon_event_loop_t* _event_loop = NULL;
 static struct blecon_t _blecon = {0};
@@ -39,6 +30,7 @@ static void example_on_connection(struct blecon_t* blecon);
 static void example_on_disconnection(struct blecon_t* blecon);
 static void example_on_time_update(struct blecon_t* blecon);
 static void example_on_ping_result(struct blecon_t* blecon);
+static void example_on_scan_report(struct blecon_t* blecon);
 static void example_on_scan_complete(struct blecon_t* blecon);
 
 const static struct blecon_callbacks_t blecon_callbacks = {
@@ -46,6 +38,7 @@ const static struct blecon_callbacks_t blecon_callbacks = {
     .on_disconnection = example_on_disconnection,
     .on_time_update = example_on_time_update,
     .on_ping_result = example_on_ping_result,
+    .on_scan_report = example_on_scan_report,
     .on_scan_complete = example_on_scan_complete,
 };
 
@@ -118,6 +111,8 @@ void example_on_time_update(struct blecon_t* blecon) {
 }
 
 void example_on_ping_result(struct blecon_t* blecon) {}
+
+void example_on_scan_report(struct blecon_t* blecon) {}
 
 void example_on_scan_complete(struct blecon_t* blecon) {
     printk("Scan complete\r\n");
@@ -223,52 +218,11 @@ int main(void)
     k_sleep(K_MSEC(1000));
 #endif
     
-#if defined(CONFIG_BLECON_INTERNAL_MODEM)
-    // Init Event Loop
-    _event_loop = blecon_zephyr_event_loop_new();
+    // Get event loop
+    _event_loop = blecon_zephyr_get_event_loop();
 
-    // Init Bluetooth port
-    struct blecon_bluetooth_t* bluetooth = blecon_zephyr_bluetooth_init(_event_loop);
-
-    // Init Crypto port
-    struct blecon_crypto_t* crypto = blecon_zephyr_crypto_init();
-
-    // Init NVM port
-    struct blecon_nvm_t* nvm = blecon_zephyr_nvm_init();
-
-    // Init NFC port
-    struct blecon_nfc_t* nfc = blecon_zephyr_nfc_init();
-
-    // Init internal modem
-    struct blecon_modem_t* modem = blecon_int_modem_create(
-        _event_loop,
-        bluetooth,
-        crypto,
-        nvm,
-        nfc,
-        malloc
-    );
-#elif defined(CONFIG_BLECON_EXTERNAL_MODEM)
-    // Init Event Loop
-    _event_loop = blecon_zephyr_event_loop_new();
-
-    // Init UART device
-    const struct device* uart_device = DEVICE_DT_GET(DT_PARENT(DT_NODELABEL(blecon_modem)));
-
-    // Init external modem transport
-    struct blecon_zephyr_ext_modem_uart_transport_t ext_modem_uart_transport;
-    blecon_zephyr_ext_modem_uart_transport_init(&ext_modem_uart_transport, _event_loop, uart_device);
-
-    // Init external modem
-    struct blecon_modem_t* modem = blecon_ext_modem_create(
-        _event_loop,
-        blecon_zephyr_ext_modem_uart_transport_as_transport(&ext_modem_uart_transport),
-        malloc
-    );
-#else
-    #error "No modem implementation selected - please enable a Blecon modem implementation in prj.conf"
-#endif
-    blecon_assert(modem != NULL); // Make sure allocation was successful
+    // Get modem
+    struct blecon_modem_t* modem = blecon_zephyr_get_modem();
 
     // Register event ids for shell commands
     _cmd_blecon_connection_initiate_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, cmd_blecon_connection_initiate_event, NULL);
