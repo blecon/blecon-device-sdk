@@ -12,8 +12,8 @@ if BLECON
 
 choice
     bool "Modem type"
-    default BLECON_INTERNAL_MODEM if (SOC_SERIES_NRF52X || SOC_SERIES_NRF53X)
-    default BLECON_EXTERNAL_MODEM if !(SOC_SERIES_NRF52X || SOC_SERIES_NRF53X)
+    default BLECON_INTERNAL_MODEM if (SOC_SERIES_NRF52X || SOC_SERIES_NRF53X || SOC_SERIES_NRF54LX)
+    default BLECON_EXTERNAL_MODEM if !(SOC_SERIES_NRF52X || SOC_SERIES_NRF53X || SOC_SERIES_NRF54LX)
 
 config BLECON_INTERNAL_MODEM
     bool "Blecon internal modem"
@@ -41,6 +41,11 @@ config BLECON_INTERNAL_MODEM_NFC
     depends on BLECON_INTERNAL_MODEM
     select BLECON_PORT_NFC
 
+config BLECON_INTERNAL_MODEM_SCAN_BUFFER_SIZE
+    int "Blecon internal modem scan buffer size"
+    default 1024
+    depends on BLECON_INTERNAL_MODEM
+
 config BLECON_EXTERNAL_MODEM_UART_TRANSPORT_RX_FIFO_SZ
     int "Blecon external modem UART RX FIFO size"
     default 256
@@ -58,6 +63,13 @@ config BLECON_PORT_CRYPTO
     select PSA_WANT_ALG_CHACHA20_POLY1305
     select PSA_WANT_ALG_ECDH
     select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR
+    select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_BASIC
+    select PSA_WANT_KEY_TYPE_ECC_PUBLIC_KEY
+    select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_IMPORT
+    select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_EXPORT
+    select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_GENERATE
+    select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_DERIVE
+    select PSA_WANT_KEY_TYPE_CHACHA20
     select PSA_WANT_ECC_MONTGOMERY_255
     select PSA_WANT_ALG_SHA_256
     select PSA_WANT_ALG_HKDF
@@ -76,12 +88,13 @@ config BLECON_PORT_NVM_ERASE
 config BLECON_PORT_BLUETOOTH
     bool "Blecon Bluetooth port"
     default n
-    depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF53X
+    depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF53X || SOC_SERIES_NRF54LX
     depends on BT
     depends on BT_PERIPHERAL
     depends on BT_USER_PHY_UPDATE
     depends on BT_SMP
     depends on BT_L2CAP_DYNAMIC_CHANNEL
+    depends on BT_L2CAP_SEG_RECV
     depends on BT_EXT_ADV
     depends on BT_EXT_ADV_MAX_ADV_SET >= 3
     depends on BT_ID_MAX >= 3
@@ -116,6 +129,23 @@ config BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS
     int "Maximum number of Bluetooth connections"
     default 1
     depends on BLECON_PORT_BLUETOOTH
+
+config BLECON_MEMFAULT
+    bool "Enable Memfault integration"
+    default y if MEMFAULT
+    depends on MEMFAULT
+
+config BLECON_MEMFAULT_HARDWARE_VERSION
+    string "Hardware Version"
+    default BOARD
+
+config BLECON_MEMFAULT_SOFTWARE_VERSION
+    string "Software Version"
+    default MCUBOOT_IMGTOOL_SIGN_VERSION
+
+config BLECON_MEMFAULT_SOFTWARE_TYPE
+    string "Software Type"
+
 
 endif
 

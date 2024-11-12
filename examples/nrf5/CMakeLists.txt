@@ -12,6 +12,10 @@ add_executable(large-request large-request.c main.c nrf_log_backend_stdout.c)
 target_link_libraries(large-request PRIVATE blecon_nrf5 blecon)
 nrf5_app(large-request)
 
+add_executable(scanner scanner.c main.c nrf_log_backend_stdout.c)
+target_link_libraries(scanner PRIVATE blecon_nrf5 blecon)
+nrf5_app(scanner)
+
 if(BLECON_NRF5_BOARD STREQUAL "NRF52_DK")
     # Reduce large request buffer size for NRF52_DK
     target_compile_definitions(large-request PRIVATE -DLARGE_REQUEST_EXAMPLE_BUFFER_SZ=16384)

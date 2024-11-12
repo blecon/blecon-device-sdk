@@ -24,7 +24,7 @@ extern "C" {
 struct blecon_nrf5_bluetooth_t;
 
 struct blecon_nrf5_gatts_bearer_t {
-    struct blecon_bluetooth_gatts_bearer_t gatts_bearer;
+    struct blecon_bluetooth_gatt_server_t gatt_server;
     struct blecon_bearer_t bearer;
     ble_gatts_char_handles_t handles;
     bool connected;
@@ -37,16 +37,15 @@ struct blecon_nrf5_gatts_t {
     size_t bearers_count;
     uint16_t service_handle;
     uint8_t base_service_characteristics_uuid;
-    uint16_t connection_handle;
+    // uint16_t connection_handle;
     size_t att_mtu;
 };
 
-void blecon_nrf5_bluetooth_gatts_init(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
-void blecon_nrf5_bluetooth_gatts_setup(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
+void blecon_nrf5_bluetooth_gatt_server_init(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
+void blecon_nrf5_bluetooth_gatt_server_setup(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
 
-struct blecon_bluetooth_gatts_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_new(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid);
-struct blecon_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_as_bearer(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer);
-void blecon_nrf5_bluetooth_gatts_bearer_free(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer);
+struct blecon_bluetooth_gatt_server_t* blecon_nrf5_bluetooth_gatt_server_new(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid);
+struct blecon_bearer_t* blecon_nrf5_bluetooth_connection_get_gatt_server_bearer(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_gatt_server_t* gatts);
 
 #ifdef __cplusplus
 }

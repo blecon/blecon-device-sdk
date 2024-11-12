@@ -37,6 +37,8 @@ static inline struct blecon_buffer_t blecon_buffer_get_null(void) {
 struct blecon_buffer_t blecon_buffer_stack(struct blecon_buffer_t buffer, size_t header_sz, size_t footer_sz);
 struct blecon_buffer_t blecon_buffer_unstack(struct blecon_buffer_t buffer, size_t header_sz, size_t footer_sz);
 
+struct blecon_buffer_t blecon_buffer_reset(struct blecon_buffer_t buffer);
+
 size_t blecon_buffer_total_allocations_size(void);
 size_t blecon_buffer_total_allocations_count(void);
 

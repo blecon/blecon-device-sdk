@@ -63,49 +63,63 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context);
 static void adv_timeout_handler(void * p_context);
 
 static void blecon_nrf5_bluetooth_setup(struct blecon_bluetooth_t* bluetooth);
-static int32_t blecon_nrf5_bluetooth_advertising_tx_power(struct blecon_bluetooth_t* bluetooth);
-static int32_t blecon_nrf5_bluetooth_connection_tx_power(struct blecon_bluetooth_t* bluetooth);
-static int32_t blecon_nrf5_bluetooth_connection_rssi(struct blecon_bluetooth_t* bluetooth);
-static enum blecon_bluetooth_phy_t blecon_nrf5_bluetooth_connection_phy(struct blecon_bluetooth_t* bluetooth);
-static void blecon_nrf5_bluetooth_advertising_set_data(
-        struct blecon_bluetooth_t* bluetooth,
-        const struct blecon_bluetooth_advertising_set_t* adv_sets,
-        size_t adv_sets_count
-    );
-static bool blecon_nrf5_bluetooth_advertising_start(struct blecon_bluetooth_t* bluetooth, uint32_t adv_interval_ms);
-static void blecon_nrf5_bluetooth_advertising_stop(struct blecon_bluetooth_t* bluetooth);
-static void blecon_nrf5_bluetooth_rotate_mac_address(struct blecon_bluetooth_t* bluetooth);
-static void blecon_nrf5_bluetooth_get_mac_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_mac_addr);
-static void blecon_nrf5_bluetooth_disconnect(struct blecon_bluetooth_t* bluetooth);
+static void blecon_nrf5_bluetooth_shutdown(struct blecon_bluetooth_t* bluetooth);
+static struct blecon_bluetooth_advertising_set_t* blecon_nrf5_advertising_set_new(struct blecon_bluetooth_t* bluetooth);
+static void blecon_nrf5_bluetooth_advertising_set_update_params(struct blecon_bluetooth_advertising_set_t* adv_set, struct blecon_bluetooth_advertising_params_t* params);
+static void blecon_nrf5_bluetooth_advertising_set_update_data(struct blecon_bluetooth_advertising_set_t* adv_set, struct blecon_bluetooth_advertising_data_t* data);
+static void blecon_nrf5_bluetooth_advertising_set_start(struct blecon_bluetooth_advertising_set_t* adv_set);
+static void blecon_nrf5_bluetooth_advertising_set_stop(struct blecon_bluetooth_advertising_set_t* adv_set);
+static void blecon_nrf5_bluetooth_advertising_set_free(struct blecon_bluetooth_advertising_set_t* adv_set);
+static void blecon_nrf5_bluetooth_get_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_addr);
+static void blecon_nrf5_bluetooth_connection_get_info(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_connection_info_t* info);
+static void blecon_nrf5_bluetooth_connection_get_power_info(struct blecon_bluetooth_connection_t* connection, int8_t* tx_power, int8_t* rssi);
+static void blecon_nrf5_bluetooth_connection_disconnect(struct blecon_bluetooth_connection_t* connection);
+static void blecon_nrf5_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection);
+static void blecon_nrf5_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask);
+static void blecon_nrf5_bluetooth_scan_stop(struct blecon_bluetooth_t* bluetooth);
 
 struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
     static const struct blecon_bluetooth_fn_t bluetooth_fn = {
         .setup = blecon_nrf5_bluetooth_setup,
-        .advertising_tx_power = blecon_nrf5_bluetooth_advertising_tx_power,
-        .connection_tx_power = blecon_nrf5_bluetooth_connection_tx_power,
-        .connection_rssi = blecon_nrf5_bluetooth_connection_rssi,
-        .connection_phy = blecon_nrf5_bluetooth_connection_phy,
-        .advertising_set_data = blecon_nrf5_bluetooth_advertising_set_data,
-        .advertising_start = blecon_nrf5_bluetooth_advertising_start,
-        .advertising_stop = blecon_nrf5_bluetooth_advertising_stop,
-        .rotate_mac_address = blecon_nrf5_bluetooth_rotate_mac_address,
-        .get_mac_address = blecon_nrf5_bluetooth_get_mac_address,
-        .disconnect = blecon_nrf5_bluetooth_disconnect,
+        .shutdown = blecon_nrf5_bluetooth_shutdown,
+        .advertising_set_new = blecon_nrf5_advertising_set_new,
+        .advertising_set_update_params = blecon_nrf5_bluetooth_advertising_set_update_params,
+        .advertising_set_update_data = blecon_nrf5_bluetooth_advertising_set_update_data,
+        .advertising_set_start = blecon_nrf5_bluetooth_advertising_set_start,
+        .advertising_set_stop = blecon_nrf5_bluetooth_advertising_set_stop,
+        .advertising_set_free = blecon_nrf5_bluetooth_advertising_set_free,
+        .get_address = blecon_nrf5_bluetooth_get_address,
         .l2cap_server_new = blecon_nrf5_bluetooth_l2cap_server_new,
-        .l2cap_server_as_bearer = blecon_nrf5_bluetooth_l2cap_server_as_bearer,
-        .l2cap_server_free = blecon_nrf5_bluetooth_l2cap_server_free,
-        .gatts_bearer_new = blecon_nrf5_bluetooth_gatts_bearer_new,
-        .gatts_bearer_as_bearer = blecon_nrf5_bluetooth_gatts_bearer_as_bearer,
-        .gatts_bearer_free = blecon_nrf5_bluetooth_gatts_bearer_free
+        .gatt_server_new = blecon_nrf5_bluetooth_gatt_server_new,
+        .connection_get_info = blecon_nrf5_bluetooth_connection_get_info,
+        .connection_get_power_info = blecon_nrf5_bluetooth_connection_get_power_info,
+        .connection_disconnect = blecon_nrf5_bluetooth_connection_disconnect,
+        .connection_get_l2cap_server_bearer = blecon_nrf5_bluetooth_connection_get_l2cap_server_bearer,
+        .connection_get_gatt_server_bearer = blecon_nrf5_bluetooth_connection_get_gatt_server_bearer,
+        .connection_free = blecon_nrf5_bluetooth_connection_free,
+        .scan_start = blecon_nrf5_bluetooth_scan_start,
+        .scan_stop = blecon_nrf5_bluetooth_scan_stop
     };
 
     blecon_bluetooth_init(&_nrf5_bluetooth.bluetooth, &bluetooth_fn);
 
-    _nrf5_bluetooth.conn_handle = BLE_CONN_HANDLE_INVALID;
-    _nrf5_bluetooth.conn_phy = blecon_bluetooth_phy_1m;
-    _nrf5_bluetooth.advertising = false;
+    _nrf5_bluetooth.advertising.sets_count = 0;
+    _nrf5_bluetooth.advertising.set_current = 0;
+    _nrf5_bluetooth.advertising.set_next = 0;
+    _nrf5_bluetooth.advertising.handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
+    _nrf5_bluetooth.advertising.sets_advertising = 0;
 
-    blecon_nrf5_bluetooth_gatts_init(&_nrf5_bluetooth);
+    _nrf5_bluetooth.connection.handle = BLE_CONN_HANDLE_INVALID;
+    _nrf5_bluetooth.connection.phy = blecon_bluetooth_phy_1m;
+    memset(&_nrf5_bluetooth.connection.our_bt_addr, 0, sizeof(_nrf5_bluetooth.connection.our_bt_addr));
+    memset(&_nrf5_bluetooth.connection.peer_bt_addr, 0, sizeof(_nrf5_bluetooth.connection.peer_bt_addr));
+
+    blecon_nrf5_bluetooth_gatt_server_init(&_nrf5_bluetooth);
+
+#ifdef S140
+    memset(&_nrf5_bluetooth.scan_params, 0, sizeof(_nrf5_bluetooth.scan_params));
+    _nrf5_bluetooth.is_scanning = false;
+#endif
 
     return &_nrf5_bluetooth.bluetooth;
 }
@@ -115,13 +129,6 @@ void blecon_nrf5_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
 
     // Initialize softdevice here
     softdevice_init();
-
-    // Initialize state
-    nrf5_bluetooth->advertising = false;
-    nrf5_bluetooth->adv_data.handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
-    nrf5_bluetooth->adv_data.sets_count = 0;
-    nrf5_bluetooth->adv_data.current_set = 0;
-    nrf5_bluetooth->adv_data.next_set = 0;
     
     // Initialize BLE stack
     ble_stack_init();
@@ -129,133 +136,228 @@ void blecon_nrf5_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
     conn_params_init();
 
     // Initialize GATT server module
-    blecon_nrf5_bluetooth_gatts_setup(nrf5_bluetooth);
+    blecon_nrf5_bluetooth_gatt_server_setup(nrf5_bluetooth);
     
     // Create timer
     ret_code_t err_code = app_timer_create(&_timer_id,
     APP_TIMER_MODE_REPEATED, adv_timeout_handler);
     blecon_assert(err_code == NRF_SUCCESS);
-
-    // Retrieve base MAC address from softdevice
-    sd_ble_gap_addr_get(&nrf5_bluetooth->adv_data.base_addr);
 }
 
-int32_t blecon_nrf5_bluetooth_advertising_tx_power(struct blecon_bluetooth_t* bluetooth) {
-    return BLE_TX_POWER;
+void blecon_nrf5_bluetooth_shutdown(struct blecon_bluetooth_t* bluetooth) {
+
 }
 
-int32_t blecon_nrf5_bluetooth_connection_tx_power(struct blecon_bluetooth_t* bluetooth) {
-    return BLE_TX_POWER;
-}
-
-int32_t blecon_nrf5_bluetooth_connection_rssi(struct blecon_bluetooth_t* bluetooth) {
+struct blecon_bluetooth_advertising_set_t* blecon_nrf5_advertising_set_new(struct blecon_bluetooth_t* bluetooth) {
     struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
-    blecon_assert(nrf5_bluetooth->conn_handle != BLE_CONN_HANDLE_INVALID);
- 
-    int8_t rssi = 0;
-    uint8_t ch_index = 0;
-    ret_code_t err_code = sd_ble_gap_rssi_get(nrf5_bluetooth->conn_handle, &rssi, &ch_index);
+    blecon_assert(nrf5_bluetooth->advertising.sets_count < BLECON_MAX_ADVERTISING_SETS);
+
+    struct blecon_nrf5_bluetooth_advertising_set_t* adv_set = &nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.sets_count];
+    nrf5_bluetooth->advertising.sets_count++;
+
+    memset(&adv_set->params, 0, sizeof(struct blecon_bluetooth_advertising_params_t));
+    memset(adv_set->data, 0, sizeof(adv_set->data));
+
+    adv_set->data_sz = 0;
+    adv_set->is_advertising = false;
+
+    return &adv_set->set;
+}
+
+void blecon_nrf5_bluetooth_advertising_set_update_params(struct blecon_bluetooth_advertising_set_t* adv_set, struct blecon_bluetooth_advertising_params_t* params) {
+    struct blecon_nrf5_bluetooth_advertising_set_t* nrf5_adv_set = (struct blecon_nrf5_bluetooth_advertising_set_t*)adv_set;
+
+    // Update tx power
+    params->tx_power = BLE_TX_POWER;
+
+    // Save parameters
+    nrf5_adv_set->params = *params;
+}
+
+void blecon_nrf5_bluetooth_advertising_set_update_data(struct blecon_bluetooth_advertising_set_t* adv_set, struct blecon_bluetooth_advertising_data_t* data) {
+    struct blecon_nrf5_bluetooth_advertising_set_t* nrf5_adv_set = (struct blecon_nrf5_bluetooth_advertising_set_t*)adv_set;
+
+    blecon_assert(data->data_sz <= sizeof(nrf5_adv_set->data));
+
+    // Save data
+    nrf5_adv_set->data_sz = data->data_sz;
+    memcpy(nrf5_adv_set->data, data->data, data->data_sz);
+}
+
+void blecon_nrf5_bluetooth_advertising_set_start(struct blecon_bluetooth_advertising_set_t* adv_set) {
+    struct blecon_nrf5_bluetooth_advertising_set_t* nrf5_adv_set = (struct blecon_nrf5_bluetooth_advertising_set_t*)adv_set;
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)adv_set->bluetooth;
+    if(nrf5_adv_set->is_advertising) {
+        return;
+    }
+    nrf5_adv_set->is_advertising = true;
+
+    nrf5_bluetooth->advertising.sets_advertising++;
+    if(nrf5_bluetooth->advertising.sets_advertising > 1) {
+        return; // Already advertising
+    }
+    nrf5_bluetooth->advertising.set_next = (nrf5_adv_set - nrf5_bluetooth->advertising.sets) / sizeof(struct blecon_nrf5_bluetooth_advertising_set_t);
+
+    // Start timer
+    ret_code_t err_code;
+    err_code = app_timer_start(_timer_id, APP_TIMER_TICKS(nrf5_adv_set->params.interval_0_625ms * 1000 / 625), NULL);
     blecon_assert(err_code == NRF_SUCCESS);
 
-    return rssi;
+    // Start advertising
+    advertising_start(nrf5_bluetooth);    
 }
 
-enum blecon_bluetooth_phy_t blecon_nrf5_bluetooth_connection_phy(struct blecon_bluetooth_t* bluetooth) {
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
-    return nrf5_bluetooth->conn_phy;
-}
-
-void blecon_nrf5_bluetooth_advertising_set_data(
-        struct blecon_bluetooth_t* bluetooth,
-        const struct blecon_bluetooth_advertising_set_t* adv_sets,
-        size_t adv_sets_count
-    ) {
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
-    // We need to save the advertising data here, and we need to alternate between buffers
-    if(adv_sets_count > BLECON_NRF5_BLUETOOTH_MAX_ADV_SETS) {
-        blecon_fatal_error();
+void blecon_nrf5_bluetooth_advertising_set_stop(struct blecon_bluetooth_advertising_set_t* adv_set) {
+    struct blecon_nrf5_bluetooth_advertising_set_t* nrf5_adv_set = (struct blecon_nrf5_bluetooth_advertising_set_t*)adv_set;
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)adv_set->bluetooth;
+    if(!nrf5_adv_set->is_advertising) {
+        return;
     }
-
-    // If advertising is running, stop
-    if(nrf5_bluetooth->advertising) {
-        advertising_stop(nrf5_bluetooth);
-    }
-
-    memcpy(&nrf5_bluetooth->adv_data.sets, adv_sets, sizeof(struct blecon_bluetooth_advertising_set_t) * adv_sets_count);
-    nrf5_bluetooth->adv_data.sets_count = adv_sets_count;
-    if(nrf5_bluetooth->adv_data.next_set >= nrf5_bluetooth->adv_data.sets_count) {
-        nrf5_bluetooth->adv_data.next_set = 0;
-    }
-
-    if(nrf5_bluetooth->advertising) {
+    nrf5_adv_set->is_advertising = false;
+    blecon_assert(nrf5_bluetooth->advertising.sets_advertising > 0);
+    nrf5_bluetooth->advertising.sets_advertising--;
+    app_timer_stop(_timer_id);
+    advertising_stop(nrf5_bluetooth);
+    if( nrf5_bluetooth->advertising.sets_advertising > 0 ) {
+        // Continue advertising
         advertising_start(nrf5_bluetooth);
     }
 }
 
-bool blecon_nrf5_bluetooth_advertising_start(struct blecon_bluetooth_t* bluetooth, uint32_t adv_interval_ms) {
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
-    nrf5_bluetooth->advertising = true;
-    nrf5_bluetooth->adv_data.next_set = 0;
+void blecon_nrf5_bluetooth_advertising_set_free(struct blecon_bluetooth_advertising_set_t* adv_set) {
+    blecon_fatal_error(); // Not allowed
+}
 
-    // Start timer
-    ret_code_t err_code;
-    err_code = app_timer_start(_timer_id, APP_TIMER_TICKS(adv_interval_ms), NULL);
+void blecon_nrf5_bluetooth_get_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_addr) {
+    // Retrieve base MAC address from softdevice
+    ble_gap_addr_t gap_addr = {0};
+    ret_code_t err_code = sd_ble_gap_addr_get(&gap_addr);
     blecon_assert(err_code == NRF_SUCCESS);
 
-    advertising_start(nrf5_bluetooth);
-    return true;
+    bt_addr->addr_type = gap_addr.addr_type;
+    memcpy(bt_addr->bytes, gap_addr.addr, BLECON_BLUETOOTH_ADDR_SZ);
 }
 
-void blecon_nrf5_bluetooth_advertising_stop(struct blecon_bluetooth_t* bluetooth) {
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
-    nrf5_bluetooth->advertising = false;
-    app_timer_stop(_timer_id);
-    advertising_stop(nrf5_bluetooth);
+void blecon_nrf5_bluetooth_connection_get_info(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_connection_info_t* info) {
+    struct blecon_nrf5_bluetooth_connection_t* nrf5_connection = (struct blecon_nrf5_bluetooth_connection_t*)connection;
+    info->is_central = false; // We don't support the central role
+    info->our_bt_addr = nrf5_connection->our_bt_addr;
+    info->peer_bt_addr = nrf5_connection->peer_bt_addr;
+    info->phy = nrf5_connection->phy;
 }
 
-void blecon_nrf5_bluetooth_rotate_mac_address(struct blecon_bluetooth_t* bluetooth) {
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
-
-    // Change MAC address
-    ble_gap_addr_t* new_address = &nrf5_bluetooth->adv_data.base_addr;
-    
-    struct blecon_crypto_t* crypto = blecon_nrf5_crypto_internal_get();
-    
-    blecon_crypto_get_random(crypto, new_address->addr, BLE_GAP_ADDR_LEN);
-
-    new_address->addr[5] |= 0xc0; // Random static address
+void blecon_nrf5_bluetooth_connection_get_power_info(struct blecon_bluetooth_connection_t* connection, int8_t* tx_power, int8_t* rssi) {
+    struct blecon_nrf5_bluetooth_connection_t* nrf5_connection = (struct blecon_nrf5_bluetooth_connection_t*)connection;
+    *tx_power = BLE_TX_POWER;
+    uint8_t ch_index = 0;
+    ret_code_t err_code = sd_ble_gap_rssi_get(nrf5_connection->handle, rssi, &ch_index);
+    blecon_assert(err_code == NRF_SUCCESS);
 }
 
-void blecon_nrf5_bluetooth_get_mac_address(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_addr_t* bt_mac_addr) {
-    ble_gap_addr_t adv_addr;
-    sd_ble_gap_addr_get(&adv_addr);
-    bt_mac_addr->addr_type = adv_addr.addr_type;
-    memcpy(bt_mac_addr->bytes, &adv_addr.addr[0], BLECON_BLUETOOTH_ADDR_SZ);
-}
-
-void blecon_nrf5_bluetooth_disconnect(struct blecon_bluetooth_t* bluetooth) {
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
-    if(nrf5_bluetooth->conn_handle == BLE_CONN_HANDLE_INVALID) {
+void blecon_nrf5_bluetooth_connection_disconnect(struct blecon_bluetooth_connection_t* connection) {
+    struct blecon_nrf5_bluetooth_connection_t* nrf5_connection = (struct blecon_nrf5_bluetooth_connection_t*)connection; 
+    if(nrf5_connection->handle == BLE_CONN_HANDLE_INVALID) {
         return;
     }
     
-    ret_code_t err_code = sd_ble_gap_disconnect(nrf5_bluetooth->conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    ret_code_t err_code = sd_ble_gap_disconnect(nrf5_connection->handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
     blecon_assert( (err_code == 0) || (err_code == NRF_ERROR_INVALID_STATE /* if disconnection was already triggered, but hasn't completed yet */) );
+}
+
+void blecon_nrf5_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection) {
+
+}
+
+void blecon_nrf5_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask) {
+#ifdef S140
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
+    // Populate scan parameters
+    nrf5_bluetooth->scan_params.extended = 1;
+    nrf5_bluetooth->scan_params.report_incomplete_evts = 0;
+    nrf5_bluetooth->scan_params.active = 0;
+    nrf5_bluetooth->scan_params.filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL;
+    nrf5_bluetooth->scan_params.scan_phys = 0;
+    if(phy_mask.phy_1m) {
+        nrf5_bluetooth->scan_params.scan_phys |= BLE_GAP_PHY_1MBPS;
+    }
+    if(phy_mask.phy_coded) {
+        nrf5_bluetooth->scan_params.scan_phys |= BLE_GAP_PHY_CODED;
+    }
+    nrf5_bluetooth->scan_params.interval = 160; // 100ms
+    if( (phy_mask.phy_1m) && (phy_mask.phy_coded) ) {
+        nrf5_bluetooth->scan_params.window = 80; // Share scan window between 1M and Coded PHY
+    } else {
+        nrf5_bluetooth->scan_params.window = 80;
+    }
+    nrf5_bluetooth->scan_params.timeout = BLE_GAP_SCAN_TIMEOUT_UNLIMITED; // No timeout
+    memset(nrf5_bluetooth->scan_params.channel_mask, 0, sizeof(nrf5_bluetooth->scan_params.channel_mask)); // Scan on all advertising channels
+
+    ble_data_t adv_report_buffer = {
+        .p_data = nrf5_bluetooth->scan_buffer,
+        .len = sizeof(nrf5_bluetooth->scan_buffer)
+    };
+
+    ret_code_t err_code = sd_ble_gap_scan_start(&nrf5_bluetooth->scan_params, &adv_report_buffer);
+    blecon_assert(err_code == NRF_SUCCESS);
+
+    nrf5_bluetooth->is_scanning = true;
+
+#else
+    blecon_fatal_error(); // Not supported
+#endif
+}
+
+void blecon_nrf5_bluetooth_scan_stop(struct blecon_bluetooth_t* bluetooth) {
+#ifdef S140
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
+
+    sd_ble_gap_scan_stop();
+
+    nrf5_bluetooth->is_scanning = false;
+#else
+    blecon_fatal_error(); // Not supported
+#endif
 }
 
 // Private functions
 void advertising_stop(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
-    sd_ble_gap_adv_stop(nrf5_bluetooth->adv_data.handle);
+    sd_ble_gap_adv_stop(nrf5_bluetooth->advertising.handle);
 }
 
 void advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
-    const struct blecon_bluetooth_advertising_set_t* adv_set = &nrf5_bluetooth->adv_data.sets[nrf5_bluetooth->adv_data.next_set];
+    const struct blecon_nrf5_bluetooth_advertising_set_t* adv_set = &nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_next];
 
     // Advertising parameters should only be set if advertising is not running
     ble_gap_adv_params_t adv_params = {0};
-    uint32_t ret = 0;
+
+    // Advertising PDU
+    if( adv_set->params.legacy_pdu ) {
+        if(adv_set->params.is_connectable) {
+            adv_params.properties.type = BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED;
+        } else {
+            adv_params.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+        }
+    } else {
+        #if S140
+        if(adv_set->params.is_connectable) {
+            adv_params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_CONNECTABLE_NONSCANNABLE_UNDIRECTED;
+        } else {
+            adv_params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+        }
+        #else
+        blecon_fatal_error(); // Extended advertising not supported on other softdevices
+        #endif
+    }
+
+    // Interval and duration
+    adv_params.interval = BLE_GAP_ADV_INTERVAL_MAX;
+    adv_params.duration = 0;
+    adv_params.max_adv_evts = 1; // Always max 1 event
+    // Tailgate all advertising sets
+
+    // PHY
     #if BLECON_CODED_PHY
-    if( adv_set->phy == blecon_bluetooth_phy_1m ) {
+    if( adv_set->params.phy == blecon_bluetooth_phy_1m ) {
     #endif
         adv_params.primary_phy     = BLE_GAP_PHY_1MBPS;
     #if BLECON_CODED_PHY
@@ -263,63 +365,65 @@ void advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
         adv_params.primary_phy     = BLE_GAP_PHY_CODED;
     }
     #endif
-
     adv_params.secondary_phy = adv_params.primary_phy;
-    adv_params.duration        = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
-    #if BLECON_CODED_PHY
-    if( adv_set->phy == blecon_bluetooth_phy_1m ) {
-    #endif
-        if(adv_set->is_connectable) {
-            adv_params.properties.type = BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED;
-        } else {
-            adv_params.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-        }
-    #if BLECON_CODED_PHY
-    } else { 
-        if(adv_set->is_connectable) {
-            adv_params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_CONNECTABLE_NONSCANNABLE_UNDIRECTED;
-        } else {
-            adv_params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-        }
-    }
-    #endif
-    adv_params.p_peer_addr     = NULL;
-    adv_params.filter_policy   = BLE_GAP_ADV_FP_ANY;
-    // Use maximum advertising interval here as we're managing these manually
-    adv_params.interval        = BLE_GAP_ADV_INTERVAL_MAX;
 
-    adv_params.max_adv_evts = 1; // Always max 1 event
-    // Tailgate all advertising sets
-    adv_params.duration = 0;
-
-    ble_gap_adv_data_t ble_gap_adv_data = {0};
-    ble_gap_adv_data.adv_data.p_data = (uint8_t*)adv_set->adv_data;
-    ble_gap_adv_data.adv_data.len = adv_set->adv_data_sz;
+    // SID
+    adv_params.set_id = adv_set->params.sid;
     
-    ret = sd_ble_gap_adv_set_configure(&nrf5_bluetooth->adv_data.handle, &ble_gap_adv_data, &adv_params);
+    ble_gap_adv_data_t ble_gap_adv_data = {0};
+    ble_gap_adv_data.adv_data.p_data = (uint8_t*)adv_set->data;
+    ble_gap_adv_data.adv_data.len = adv_set->data_sz;
+    
+    ret_code_t ret = sd_ble_gap_adv_set_configure(&nrf5_bluetooth->advertising.handle, &ble_gap_adv_data, &adv_params);
     blecon_assert(ret == NRF_SUCCESS);
 
     // Set TX power for this advertising handle
-    ret = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, nrf5_bluetooth->adv_data.handle, BLE_TX_POWER);
+    ret = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, adv_set->params.tx_power, BLE_TX_POWER);
     blecon_assert(ret == NRF_SUCCESS);
 
-    // Rotate mac address
-    ble_gap_addr_t mac_addr = nrf5_bluetooth->adv_data.base_addr;
-    mac_addr.addr[0] += nrf5_bluetooth->adv_data.next_set & 0xff; // Rotate Address LSB
+    // Set advertising address
+    ble_gap_addr_t addr = {0};
+    addr.addr_type = adv_set->params.bt_addr.addr_type;
+    memcpy(addr.addr, adv_set->params.bt_addr.bytes, BLECON_BLUETOOTH_ADDR_SZ);
+
+#if S140
+    // If we're scanning, we need to stop doing so before being able to set the advertising address
+    if(nrf5_bluetooth->is_scanning) {
+        sd_ble_gap_scan_stop();
+    }
+#endif
 
     do
     {
-        ret = sd_ble_gap_addr_set(&mac_addr);
+        ret = sd_ble_gap_addr_set(&addr);
     } while (ret == NRF_ERROR_INVALID_STATE);
 
+#if S140
+    // Resume scanning if needed
+    if(nrf5_bluetooth->is_scanning) {
+        ble_data_t adv_report_buffer = {
+            .p_data = nrf5_bluetooth->scan_buffer,
+            .len = sizeof(nrf5_bluetooth->scan_buffer)
+        };
+
+        ret_code_t err_code = sd_ble_gap_scan_start(&nrf5_bluetooth->scan_params, &adv_report_buffer);
+        blecon_assert(err_code == NRF_SUCCESS);
+    }
+#endif
+
     // Save set number
-    nrf5_bluetooth->adv_data.current_set = nrf5_bluetooth->adv_data.next_set;
+    nrf5_bluetooth->advertising.set_current = nrf5_bluetooth->advertising.set_next;
 
     // Increment rotating advertising sets counter
-    nrf5_bluetooth->adv_data.next_set = (nrf5_bluetooth->adv_data.next_set + 1) % nrf5_bluetooth->adv_data.sets_count;
+    do {
+        nrf5_bluetooth->advertising.set_next = (nrf5_bluetooth->advertising.set_next + 1) % nrf5_bluetooth->advertising.sets_count;
+    } while( !nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_next].is_advertising );
+
+    // Check that both advertising sets have the same interval
+    blecon_assert(adv_set->params.interval_0_625ms == nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_next].params.interval_0_625ms);
 
     // Start advertising
-    ret = sd_ble_gap_adv_start(nrf5_bluetooth->adv_data.handle, APP_BLE_CONN_CFG_TAG);
+    ret = sd_ble_gap_adv_start(nrf5_bluetooth->advertising.handle, APP_BLE_CONN_CFG_TAG);
     blecon_assert(ret == NRF_SUCCESS);
 }
 
@@ -421,21 +525,29 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            nrf5_bluetooth->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+            // Init connection
+            blecon_bluetooth_connection_init(&nrf5_bluetooth->connection.connection, &nrf5_bluetooth->bluetooth);
+
+            nrf5_bluetooth->connection.handle = p_ble_evt->evt.gap_evt.conn_handle;
 
             // The connection's PHY is of the current advertising set
-            nrf5_bluetooth->conn_phy = nrf5_bluetooth->adv_data.sets[nrf5_bluetooth->adv_data.current_set].phy;
+            nrf5_bluetooth->connection.phy = nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_current].params.phy;
+
+            // Update addresses
+            nrf5_bluetooth->connection.our_bt_addr = nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_current].params.bt_addr;
+            nrf5_bluetooth->connection.peer_bt_addr.addr_type = p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr_type;
+            memcpy(nrf5_bluetooth->connection.peer_bt_addr.bytes, p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLECON_BLUETOOTH_ADDR_SZ);
             
             // Enable RSSI reporting
-            ret_code_t err_code = sd_ble_gap_rssi_start(nrf5_bluetooth->conn_handle, 1, 3);
+            ret_code_t err_code = sd_ble_gap_rssi_start(nrf5_bluetooth->connection.handle, 1, 3);
             blecon_assert(err_code == NRF_SUCCESS);
 
-            blecon_bluetooth_on_connected(&nrf5_bluetooth->bluetooth);
+            blecon_bluetooth_on_new_connection(&nrf5_bluetooth->bluetooth, &nrf5_bluetooth->connection.connection, &nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_current].set);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-            nrf5_bluetooth->conn_handle = BLE_CONN_HANDLE_INVALID;
-            blecon_bluetooth_on_disconnected(&nrf5_bluetooth->bluetooth);
+            nrf5_bluetooth->connection.handle = BLE_CONN_HANDLE_INVALID;
+            blecon_bluetooth_connection_on_disconnected(&nrf5_bluetooth->connection.connection);
             break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
@@ -466,7 +578,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_ADV_SET_TERMINATED:
             // Rotate advertising set unless this is the last set
-            if(nrf5_bluetooth->advertising && (nrf5_bluetooth->adv_data.next_set != 0)) {
+            if((nrf5_bluetooth->advertising.sets_advertising > 0) && (nrf5_bluetooth->advertising.set_next != 0)) {
                 // Stop - in case advertising was re-started 
                 // before a pending set terminated event was processed
                 advertising_stop(nrf5_bluetooth);
@@ -498,6 +610,40 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
         case BLE_GAP_EVT_DATA_LENGTH_UPDATE:
             // Data length updated
             break;
+#ifdef S140
+        case BLE_GAP_EVT_ADV_REPORT:
+            {
+                if( p_ble_evt->evt.gap_evt.params.adv_report.type.status == BLE_GAP_ADV_DATA_STATUS_COMPLETE ) {
+                    // Ignore incomplete or truncated data
+
+                    ble_gap_evt_adv_report_t const * p_adv_report = &p_ble_evt->evt.gap_evt.params.adv_report;
+                    struct blecon_bluetooth_advertising_info_t adv_info = {
+                        .bt_addr.addr_type = p_adv_report->peer_addr.addr_type,
+                        .legacy_pdu = !p_adv_report->type.extended_pdu,
+                        .is_connectable = p_adv_report->type.connectable,
+                        .sid = p_adv_report->type.extended_pdu ? p_adv_report->set_id : 0,
+                        .tx_power = p_adv_report->tx_power,
+                        .rssi = p_adv_report->rssi,
+                        .phy = p_adv_report->primary_phy == BLE_GAP_PHY_1MBPS ? blecon_bluetooth_phy_1m : blecon_bluetooth_phy_coded,
+                    };
+                    memcpy(adv_info.bt_addr.bytes, p_adv_report->peer_addr.addr, BLECON_BLUETOOTH_ADDR_SZ);
+
+                    struct blecon_bluetooth_advertising_data_t adv_data = {
+                        .data = p_adv_report->data.p_data,
+                        .data_sz = p_adv_report->data.len,
+                    };
+                    blecon_bluetooth_on_advertising_report(&nrf5_bluetooth->bluetooth, &adv_info, &adv_data);
+                }
+
+                // Continue scanning
+                ble_data_t adv_report_buffer = {
+                    .p_data = nrf5_bluetooth->scan_buffer,
+                    .len = sizeof(nrf5_bluetooth->scan_buffer)
+                };
+                sd_ble_gap_scan_start(NULL, &adv_report_buffer);
+            }
+            break;
+#endif
         default:
             // No implementation needed.
             break;
@@ -509,7 +655,7 @@ void adv_timeout_handler(void * p_context) {
     // Rotate advertising set
     // If next set is not 0, it means we had an overrun into the next slot
     // So wait for the next timeout event
-    if(nrf5_bluetooth->advertising && (nrf5_bluetooth->adv_data.next_set == 0)) {
+    if((nrf5_bluetooth->advertising.sets_advertising > 0) && (nrf5_bluetooth->advertising.set_next == 0)) {
         // Stop - in case advertising was re-started 
         // before a pending timeout event was processed
         advertising_stop(nrf5_bluetooth);

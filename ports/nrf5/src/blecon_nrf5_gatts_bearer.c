@@ -28,19 +28,19 @@ NRF_SDH_BLE_OBSERVER(blecon_nrf5_gatts_bearer_sdh_ble_obs, \
                      2 /* prio */,                 \
                      blecon_nrf5_gatts_bearer_on_ble_evt, NULL /* context not used */);
 
-void blecon_nrf5_bluetooth_gatts_init(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
+void blecon_nrf5_bluetooth_gatt_server_init(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
     memset(&nrf5_bluetooth->gatts.bearers, 0, sizeof(nrf5_bluetooth->gatts.bearers));
     nrf5_bluetooth->gatts.bearers_count = 0;
     nrf5_bluetooth->gatts.service_handle = 0;
     nrf5_bluetooth->gatts.base_service_characteristics_uuid = 0;
-    nrf5_bluetooth->gatts.connection_handle = BLE_CONN_HANDLE_INVALID;
+    // nrf5_bluetooth->gatts.connection_handle = BLE_CONN_HANDLE_INVALID;
     nrf5_bluetooth->gatts.att_mtu = BLE_GATT_ATT_MTU_DEFAULT;
 
     // Save pointer to bluetooth instance
     _nrf5_bluetooth = nrf5_bluetooth;
 }
 
-void blecon_nrf5_bluetooth_gatts_setup(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
+void blecon_nrf5_bluetooth_gatt_server_setup(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
     // Register base UUID for GATT characteristics
     ble_uuid128_t base_uuid = { .uuid128 = { BLECON_UUID_ENDIANNESS_SWAP(BLECON_BASE_GATT_SERVICE_UUID) } };
     ret_code_t err_code = sd_ble_uuid_vs_add(&base_uuid, &nrf5_bluetooth->gatts.base_service_characteristics_uuid);
@@ -53,7 +53,7 @@ void blecon_nrf5_bluetooth_gatts_setup(struct blecon_nrf5_bluetooth_t* nrf5_blue
     blecon_assert(err_code == NRF_SUCCESS);
 }
 
-struct blecon_bluetooth_gatts_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_new(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid) {
+struct blecon_bluetooth_gatt_server_t* blecon_nrf5_bluetooth_gatt_server_new(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid) {
     struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
     struct blecon_nrf5_gatts_t* nrf5_gatts = &nrf5_bluetooth->gatts;
 
@@ -90,16 +90,12 @@ struct blecon_bluetooth_gatts_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_new(s
 
     nrf5_gatts->bearers_count++;
 
-    return &nrf5_gatts_bearer->gatts_bearer;
+    return &nrf5_gatts_bearer->gatt_server;
 }
 
-struct blecon_bearer_t* blecon_nrf5_bluetooth_gatts_bearer_as_bearer(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer) {
-    struct blecon_nrf5_gatts_bearer_t* nrf5_gatts_bearer = (struct blecon_nrf5_gatts_bearer_t*)gatts_bearer;
+struct blecon_bearer_t* blecon_nrf5_bluetooth_connection_get_gatt_server_bearer(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_gatt_server_t* gatts) {
+    struct blecon_nrf5_gatts_bearer_t* nrf5_gatts_bearer = (struct blecon_nrf5_gatts_bearer_t*)gatts;
     return &nrf5_gatts_bearer->bearer;
-}
-
-void blecon_nrf5_bluetooth_gatts_bearer_free(struct blecon_bluetooth_gatts_bearer_t* gatts_bearer) {
-    blecon_fatal_error(); // Dynamic creation of GATTS bearers not supported on this platform
 }
 
 struct blecon_buffer_t blecon_nrf5_gatts_bearer_alloc(struct blecon_bearer_t* bearer, size_t sz, void* user_data) {
@@ -111,13 +107,13 @@ struct blecon_buffer_t blecon_nrf5_gatts_bearer_alloc(struct blecon_bearer_t* be
 
 size_t blecon_nrf5_gatts_bearer_mtu(struct blecon_bearer_t* bearer, void* user_data) {
     struct blecon_nrf5_gatts_bearer_t* nrf5_gatts_bearer = (struct blecon_nrf5_gatts_bearer_t*)user_data;
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)(nrf5_gatts_bearer->gatts_bearer.bluetooth);
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)(nrf5_gatts_bearer->gatt_server.bluetooth);
     return nrf5_bluetooth->gatts.att_mtu - 3 /* 3 bytes for opcode and attribute handle */;
 }
 
 void blecon_nrf5_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blecon_buffer_t buf, void* user_data) {
     struct blecon_nrf5_gatts_bearer_t* nrf5_gatts_bearer = (struct blecon_nrf5_gatts_bearer_t*)user_data;
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)(nrf5_gatts_bearer->gatts_bearer.bluetooth);
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)(nrf5_gatts_bearer->gatt_server.bluetooth);
 
     blecon_assert(nrf5_gatts_bearer->connected);
 
@@ -132,7 +128,7 @@ void blecon_nrf5_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blecon
     hvx_params.p_len = &hvx_len;
     hvx_params.p_data = buf.data;
 
-    ret_code_t err_code = sd_ble_gatts_hvx(nrf5_bluetooth->gatts.connection_handle, &hvx_params);
+    ret_code_t err_code = sd_ble_gatts_hvx(nrf5_bluetooth->connection.handle, &hvx_params);
     if( ((err_code == NRF_SUCCESS) && (hvx_len != buf.sz))
         || (err_code == NRF_ERROR_RESOURCES) ) {
         blecon_fatal_error();
@@ -144,7 +140,7 @@ void blecon_nrf5_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blecon
 
 void blecon_nrf5_gatts_bearer_close(struct blecon_bearer_t* bearer, void* user_data) {
     struct blecon_nrf5_gatts_bearer_t* nrf5_gatts_bearer = (struct blecon_nrf5_gatts_bearer_t*)user_data;
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)(nrf5_gatts_bearer->gatts_bearer.bluetooth);
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)(nrf5_gatts_bearer->gatt_server.bluetooth);
 
     if(!nrf5_gatts_bearer->connected) {
         return;
@@ -160,19 +156,11 @@ void blecon_nrf5_gatts_bearer_on_ble_evt(ble_evt_t const* p_ble_evt, void* p_con
     // GAP events
     switch(p_ble_evt->header.evt_id) {
         case BLE_GAP_EVT_CONNECTED: {
-            blecon_assert(nrf5_gatts->connection_handle == BLE_CONN_HANDLE_INVALID);
-
-            // Save connection handle
-            nrf5_gatts->connection_handle = p_ble_evt->evt.gap_evt.conn_handle;
-
             // Reset ATT MTU
             nrf5_gatts->att_mtu = BLE_GATT_ATT_MTU_DEFAULT;
             return;
         }
         case BLE_GAP_EVT_DISCONNECTED: {
-            // Reset connection handle
-            nrf5_gatts->connection_handle = BLE_CONN_HANDLE_INVALID;
-
             for(struct blecon_nrf5_gatts_bearer_t* nrf5_gatts_bearer = nrf5_gatts->bearers; nrf5_gatts_bearer < nrf5_gatts->bearers + nrf5_gatts->bearers_count; nrf5_gatts_bearer++) {
                 if(nrf5_gatts_bearer->connected) {
                     nrf5_gatts_bearer->connected = false;
@@ -183,7 +171,7 @@ void blecon_nrf5_gatts_bearer_on_ble_evt(ble_evt_t const* p_ble_evt, void* p_con
         }
     }
 
-    blecon_assert(nrf5_gatts->connection_handle == p_ble_evt->evt.gatts_evt.conn_handle);
+    blecon_assert(nrf5_bluetooth->connection.handle == p_ble_evt->evt.gatts_evt.conn_handle);
     
     switch (p_ble_evt->header.evt_id) {
         case BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST: {

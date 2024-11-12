@@ -1,0 +1,8 @@
+/*
+ * Copyright (c) Blecon Ltd
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Define custom error reasons that can be filtered & searched
+//! on in the Memfault UI, i.e
+// MEMFAULT_TRACE_REASON_DEFINE(critical_error)

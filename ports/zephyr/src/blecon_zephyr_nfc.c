@@ -6,7 +6,6 @@
 #include "stdlib.h"
 #include "string.h"
 #include "stdio.h"
-#include "assert.h"
 
 #include "blecon_zephyr_nfc.h"
 #include "blecon/blecon_memory.h"

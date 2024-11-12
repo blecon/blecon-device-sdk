@@ -33,6 +33,7 @@
 #define BLECON_L2CAP_MTU (BLECON_L2CAP_MPS - 2) // This is how much we can send in a SDU so that it's not fragmented over multiple PDUs
 #define BLECON_L2CAP_MAX_CONNECTIONS 2
 #define BLECON_L2CAP_MAX_QUEUED_TX_BUFFERS 2
+#define BLECON_L2CAP_MAX_QUEUED_RX_BUFFERS 2
 
 // Crypto
 #define BLECON_X25519_PRIVATE_KEY_SZ        32

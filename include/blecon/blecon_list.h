@@ -52,6 +52,10 @@ void blecon_list_remove(struct blecon_list_t* list, struct blecon_list_node_t* n
 
 void blecon_list_clear(struct blecon_list_t* list);
 
+bool blecon_list_is_empty(struct blecon_list_t* list);
+
+size_t blecon_list_size(struct blecon_list_t* list);
+
 #ifdef __cplusplus
 }
 #endif

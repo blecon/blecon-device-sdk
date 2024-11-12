@@ -26,8 +26,8 @@ extern "C" {
 #define BLECON_NRF5_BLUETOOTH_L2CAP_RX_BUF_MAX 2
 
 struct blecon_bluetooth_l2cap_server_t* blecon_nrf5_bluetooth_l2cap_server_new(struct blecon_bluetooth_t* bluetooth, uint8_t psm);
-struct blecon_bearer_t* blecon_nrf5_bluetooth_l2cap_server_as_bearer(struct blecon_bluetooth_l2cap_server_t* l2cap_server);
-void blecon_nrf5_bluetooth_l2cap_server_free(struct blecon_bluetooth_l2cap_server_t* l2cap_server);
+struct blecon_bearer_t* blecon_nrf5_bluetooth_connection_get_l2cap_server_bearer(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_l2cap_server_t* l2cap_server);
+
 
 #ifdef __cplusplus
 }

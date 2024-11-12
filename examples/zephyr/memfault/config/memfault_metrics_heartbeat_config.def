@@ -1,0 +1,8 @@
+/*
+ * Copyright (c) Blecon Ltd
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Define custom system metrics to track. For example,
+// MEMFAULT_METRICS_KEY_DEFINE(main_task_stack_hwm, kMemfaultMetricType_Unsigned)
+

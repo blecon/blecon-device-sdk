@@ -4,6 +4,7 @@
  */
 
 #include "blecon_nrf5/blecon_nrf5_l2cap_server.h"
+#include "blecon_nrf5_bluetooth_common.h"
 #include "blecon/blecon_error.h"
 #include "nrf_assert.h"
 #include "sdk_common.h"
@@ -21,7 +22,7 @@ struct blecon_nrf5_l2cap_server_t {
     bool closing;
     // ble_l2cap_ch_rx_params_t rx_params;
     ble_l2cap_ch_tx_params_t tx_params;
-    uint16_t connection_handle;
+    // uint16_t connection_handle;
     uint16_t l2cap_cid; // Connection ID of the current connection
 
     struct blecon_buffer_queue_t pending_tx_bufs; // The TX buffers queued in this module
@@ -59,7 +60,6 @@ struct blecon_bluetooth_l2cap_server_t* blecon_nrf5_bluetooth_l2cap_server_new(s
     
     blecon_bearer_set_functions(&nrf5_l2cap_server->bearer, &blecon_nrf5_l2cap_server_functions, &nrf5_l2cap_server);
     nrf5_l2cap_server->psm = psm;
-    nrf5_l2cap_server->connection_handle = BLE_CONN_HANDLE_INVALID;
     nrf5_l2cap_server->l2cap_cid = BLE_L2CAP_CID_INVALID;
     nrf5_l2cap_server->open = false;
     nrf5_l2cap_server->closing = false;
@@ -70,13 +70,9 @@ struct blecon_bluetooth_l2cap_server_t* blecon_nrf5_bluetooth_l2cap_server_new(s
     return &nrf5_l2cap_server->l2cap_server;
 }
 
-struct blecon_bearer_t* blecon_nrf5_bluetooth_l2cap_server_as_bearer(struct blecon_bluetooth_l2cap_server_t* l2cap_server) {
+struct blecon_bearer_t* blecon_nrf5_bluetooth_connection_get_l2cap_server_bearer(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_l2cap_server_t* l2cap_server) {
     struct blecon_nrf5_l2cap_server_t* nrf5_l2cap_server = (struct blecon_nrf5_l2cap_server_t*) l2cap_server;
     return &nrf5_l2cap_server->bearer;
-}
-
-void blecon_nrf5_bluetooth_l2cap_server_free(struct blecon_bluetooth_l2cap_server_t* l2cap_server) {
-    blecon_fatal_error(); // Dynamic creation of L2CAP servers not supported on this platform
 }
 
 struct blecon_buffer_t blecon_nrf5_l2cap_server_alloc(struct blecon_bearer_t* bearer, size_t sz, void* user_data) {
@@ -121,6 +117,7 @@ void blecon_nrf5_l2cap_server_close(struct blecon_bearer_t* bearer, void* user_d
 }
 
 void blecon_nrf5_l2cap_server_try_send_or_close(struct blecon_nrf5_l2cap_server_t* l2cap_server) {
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)l2cap_server->l2cap_server.bluetooth;
     while( !blecon_buffer_queue_is_empty(&l2cap_server->pending_tx_bufs) ) {
         if( l2cap_server->tx_params.credits == 0 ) {
             // Do not continue until we get more credits
@@ -156,7 +153,7 @@ void blecon_nrf5_l2cap_server_try_send_or_close(struct blecon_nrf5_l2cap_server_
         // Add to TX queue
         blecon_buffer_queue_push(&l2cap_server->tx_bufs, buf);
 
-        uint32_t err_code = sd_ble_l2cap_ch_tx(l2cap_server->connection_handle, l2cap_server->l2cap_cid, &obj);
+        uint32_t err_code = sd_ble_l2cap_ch_tx(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid, &obj);
         if (err_code == NRF_ERROR_RESOURCES)
         {
             goto done;
@@ -181,11 +178,11 @@ void blecon_nrf5_l2cap_server_try_send_or_close(struct blecon_nrf5_l2cap_server_
 
     // If closing and no more pending TX buffers, close the bearer
     if( l2cap_server->closing ) {
-        if(l2cap_server->connection_handle != BLE_CONN_HANDLE_INVALID) {
+        if(nrf5_bluetooth->connection.handle != BLE_CONN_HANDLE_INVALID) {
             if(l2cap_server->l2cap_cid != BLE_L2CAP_CID_INVALID) {
-                sd_ble_l2cap_ch_release(l2cap_server->connection_handle, l2cap_server->l2cap_cid);
+                sd_ble_l2cap_ch_release(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid);
             }
-            sd_ble_gap_disconnect(l2cap_server->connection_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+            sd_ble_gap_disconnect(nrf5_bluetooth->connection.handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
         }
 
         // All buffers will be freed when the channel is released
@@ -206,6 +203,8 @@ static inline void blecon_nrf5_l2cap_server_ch_setup_request(ble_evt_t const * p
             break;
         }
     }
+
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)l2cap_server->l2cap_server.bluetooth;
 
     ch_setup_params.status = BLE_L2CAP_CH_STATUS_CODE_SUCCESS;
 
@@ -246,10 +245,9 @@ static inline void blecon_nrf5_l2cap_server_ch_setup_request(ble_evt_t const * p
     ch_setup_params.rx_params.sdu_buf.p_data = buf.data;
     ch_setup_params.rx_params.sdu_buf.len    = buf.sz;
     
-    l2cap_server->connection_handle = p_ble_evt->evt.l2cap_evt.conn_handle; // Save connection handle
     l2cap_server->l2cap_cid = p_ble_evt->evt.l2cap_evt.local_cid; // Save provided CID
     
-    err_code = sd_ble_l2cap_ch_setup(l2cap_server->connection_handle,
+    err_code = sd_ble_l2cap_ch_setup(nrf5_bluetooth->connection.handle,
                                      &l2cap_server->l2cap_cid,
                                      &ch_setup_params);
     if (err_code != NRF_SUCCESS)
@@ -262,6 +260,8 @@ static inline void blecon_nrf5_l2cap_server_ch_setup_request(ble_evt_t const * p
 }
 
 static inline void blecon_nrf5_l2cap_server_ch_rx_setup(struct blecon_nrf5_l2cap_server_t* l2cap_server) {
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)l2cap_server->l2cap_server.bluetooth;
+
     while( blecon_buffer_queue_size(&l2cap_server->rx_bufs) < BLECON_NRF5_BLUETOOTH_L2CAP_RX_BUF_MAX )
     {
         // Allocate new buffer
@@ -273,7 +273,7 @@ static inline void blecon_nrf5_l2cap_server_ch_rx_setup(struct blecon_nrf5_l2cap
 
         bool success = false;
 
-        uint32_t err_code = sd_ble_l2cap_ch_rx(l2cap_server->connection_handle, l2cap_server->l2cap_cid, &obj);
+        uint32_t err_code = sd_ble_l2cap_ch_rx(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid, &obj);
         if (err_code == NRF_ERROR_RESOURCES)
         {
             goto done;
@@ -298,6 +298,8 @@ static inline void blecon_nrf5_l2cap_server_ch_rx_setup(struct blecon_nrf5_l2cap
 // This function is called when the L2CAP channel has been setup.
 static inline void blecon_nrf5_l2cap_server_ch_setup(struct blecon_nrf5_l2cap_server_t* l2cap_server, ble_evt_t const * p_ble_evt)
 {
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)l2cap_server->l2cap_server.bluetooth;
+
     l2cap_server->tx_params.credits = p_ble_evt->evt.l2cap_evt.params.ch_setup.tx_params.credits;
     l2cap_server->tx_params.tx_mps  = p_ble_evt->evt.l2cap_evt.params.ch_setup.tx_params.tx_mps;
     l2cap_server->tx_params.tx_mtu  = p_ble_evt->evt.l2cap_evt.params.ch_setup.tx_params.tx_mtu;
@@ -307,7 +309,7 @@ static inline void blecon_nrf5_l2cap_server_ch_setup(struct blecon_nrf5_l2cap_se
     }
 
     // Set-up credits
-    uint32_t err_code = sd_ble_l2cap_ch_flow_control(l2cap_server->connection_handle, l2cap_server->l2cap_cid,
+    uint32_t err_code = sd_ble_l2cap_ch_flow_control(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid,
         BLECON_NRF5_BLUETOOTH_L2CAP_RX_BUF_MAX + BLECON_NRF5_BLUETOOTH_L2CAP_RX_EXTRA_CREDITS, NULL);
     blecon_assert(err_code == NRF_SUCCESS);
     
@@ -417,7 +419,6 @@ void blecon_nrf5_l2cap_server_on_ble_evt(ble_evt_t const* p_ble_evt, void* p_con
             if(_l2cap_servers[idx].open) {
                 blecon_bearer_on_closed(&_l2cap_servers[idx].bearer);
             }
-            _l2cap_servers[idx].connection_handle = BLE_CONN_HANDLE_INVALID;
             _l2cap_servers[idx].l2cap_cid = BLE_L2CAP_CID_INVALID;
             _l2cap_servers[idx].open = false;
             _l2cap_servers[idx].closing = false;
@@ -460,6 +461,9 @@ void blecon_nrf5_l2cap_server_on_ble_evt(ble_evt_t const* p_ble_evt, void* p_con
         // Unknown L2CAP CID
         return;
     }
+
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)l2cap_server->l2cap_server.bluetooth;
+    blecon_assert(p_ble_evt->evt.l2cap_evt.conn_handle == nrf5_bluetooth->connection.handle);
 
     switch (p_ble_evt->header.evt_id)
     {

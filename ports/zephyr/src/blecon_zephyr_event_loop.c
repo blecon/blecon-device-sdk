@@ -4,7 +4,6 @@
  */
 #include "stdlib.h"
 #include "string.h"
-#include "assert.h"
 
 #include "blecon_zephyr_event_loop.h"
 

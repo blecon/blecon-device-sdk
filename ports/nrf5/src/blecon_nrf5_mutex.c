@@ -5,7 +5,6 @@
 
 #include "stdlib.h"
 #include "string.h"
-#include "assert.h"
 
 #include "blecon_nrf5/blecon_nrf5_mutex.h"
 

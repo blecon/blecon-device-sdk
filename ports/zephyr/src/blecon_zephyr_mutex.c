@@ -4,7 +4,6 @@
  */
 #include "stdlib.h"
 #include "string.h"
-#include "assert.h"
 
 #include "blecon/blecon_memory.h"
 #include "blecon/blecon_error.h"

@@ -5,7 +5,6 @@
 #include "stdlib.h"
 #include "string.h"
 #include "stdbool.h"
-#include "assert.h"
 
 #include "blecon_zephyr_l2cap_server.h"
 #include "blecon_zephyr_l2cap_bearer.h"
@@ -52,16 +51,9 @@ struct blecon_bluetooth_l2cap_server_t* blecon_zephyr_bluetooth_l2cap_server_new
     return &zephyr_l2cap_server->l2cap_server;
 }
 
-struct blecon_bearer_t* blecon_zephyr_bluetooth_l2cap_server_as_bearer(struct blecon_bluetooth_l2cap_server_t* l2cap_server) {
+struct blecon_bearer_t* blecon_zephyr_bluetooth_connection_get_l2cap_server_bearer(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_l2cap_server_t* l2cap_server) {
     struct blecon_zephyr_l2cap_server_t* zephyr_l2cap_server = (struct blecon_zephyr_l2cap_server_t*) l2cap_server;
     return blecon_zephyr_l2cap_bearer_as_bearer(&zephyr_l2cap_server->l2cap_bearer);
-}
-
-void blecon_zephyr_bluetooth_l2cap_server_free(struct blecon_bluetooth_l2cap_server_t* l2cap_server) {
-    struct blecon_zephyr_l2cap_server_t* zephyr_l2cap_server = (struct blecon_zephyr_l2cap_server_t*) l2cap_server;
-
-    blecon_zephyr_l2cap_bearer_cleanup(&zephyr_l2cap_server->l2cap_bearer);
-    BLECON_FREE(zephyr_l2cap_server);
 }
 
 int blecon_zephyr_l2cap_server_accept(struct bt_conn *conn, struct bt_l2cap_server *server, struct bt_l2cap_chan **chan) {

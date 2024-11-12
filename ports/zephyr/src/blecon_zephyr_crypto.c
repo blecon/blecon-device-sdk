@@ -4,7 +4,6 @@
  */
 #include "stdlib.h"
 #include "string.h"
-#include "assert.h"
 
 #include "blecon_zephyr_crypto.h"
 #include "blecon/blecon_defs.h"
@@ -217,7 +216,7 @@ fail:
 
 struct blecon_crypto_aead_cipher_t* blecon_zephyr_crypto_aead_cipher_new(struct blecon_crypto_t* crypto, const uint8_t* key, bool encrypt_ndecrypt) {
     struct blecon_zephyr_aead_cipher_t* zephyr_cipher = malloc(sizeof(struct blecon_zephyr_aead_cipher_t));
-    assert(zephyr_cipher != NULL);
+    blecon_assert(zephyr_cipher != NULL);
     blecon_crypto_aead_cipher_init(&zephyr_cipher->cipher, crypto);
 
     // Import key

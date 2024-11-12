@@ -1,7 +1,7 @@
-#   Blecon Device SDK (Preview)
+#   Blecon Device SDK
 
 > **Note**
-> This is a preview release of the Blecon SDK. Please give us feedback! You can use GitHub issues and discussions within this repository, or email us.
+> This version of the SDK works with nRF Connect SDK v2.8.0-rc1.
 
 ##  Getting started
 
@@ -9,19 +9,24 @@ Please follow [the getting started guide in our docs](https://developer.blecon.n
 
 ##  Board & Platform support
 
-This release supports the following boards along with the NCS v2.7.0 SDK and Zephyr 3.6.0 (with Nordic patches). Our `west.yml` manifest pulls in the NCS v2.7.0 SDK.
+This release supports the following boards along with the NCS v2.8.0-rc1 SDK and Zephyr 3.8.0 (with Nordic patches). Our `west.yml` manifest pulls in the NCS v2.8.0-rc1 SDK.
 We also support the legacy nRF5 SDK. We do recommend using NCS/Zephyr as the nRF5 SDK is deprecated.
 
 | Board / Platform  | NCS/Zephyr    | nRF5 SDK    |
 |-                  |-             |-             |
-| NRF52840 DK       | ✅            | ✅            |
-| NRF52833 DK       | ✅            | ✅            |
-| NRF52840 Dongle   | ✅            |              |
+| nRF54L15 DK       | ✅            |              |
+| nRF52840 DK       | ✅            | ✅            |
+| nRF52833 DK       | ✅            | ✅            |
+| nRF52840 Dongle   | ✅            |              |
 | Nucleo L433RC-P   | ✅            |              |
 
 ##  Examples
 
 Examples are available for supported platforms and boards in the [examples/](examples/) directory.
+
+> **Note**
+> The Memfault example is only available on NCS/Zephyr and the nRF54L15 DK, nRF52840 DK and nRF52840 Dongle boards.
+
 
 ##  License
 * Source code included within this repository is licensed under the [Apache 2.0 license](LICENSE.md) (SPDX: Apache-2.0)

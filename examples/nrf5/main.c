@@ -192,13 +192,18 @@ int main(void)
     // NFC
     struct blecon_nfc_t* nfc = blecon_nrf5_nfc_init();
 
-        // Init internal modem
+    // Init internal modem
     struct blecon_modem_t* modem = blecon_int_modem_create(
         event_loop,
         bluetooth,
         crypto,
         nvm,
         nfc,
+#ifdef S140
+        1024,
+#else
+        0,
+#endif
         malloc
     );
 
