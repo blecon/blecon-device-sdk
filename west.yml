@@ -1,11 +1,11 @@
 manifest:
   projects:
     - name: nrf
-      revision: v2.8.0-rc1
+      revision: v2.8.0
       url: https://github.com/nrfconnect/sdk-nrf
       import: true
     - name: zephyr
-      revision: v3.7.99-ncs1-rc1
+      revision: v3.7.99-ncs1
       url: https://github.com/nrfconnect/sdk-zephyr
       import:
         name-allowlist:
