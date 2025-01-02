@@ -219,6 +219,7 @@ void example_send_data(void) {
         if(op->busy) {
             continue;
         }
+        op->busy = true;
 
         if(_outgoing_data_buffer_pos >= sizeof(_outgoing_data_buffer)) {
             // Already finished

@@ -12,11 +12,9 @@ extern "C" {
 #include "stdbool.h"
 #include "stdint.h"
 #include "stddef.h"
-#include "blecon/port/blecon_event_loop.h"
+#include "blecon/port/blecon_timer.h"
 
-struct blecon_event_loop_t* blecon_zephyr_event_loop_new(void);
-
-void blecon_zephyr_event_loop_break(struct blecon_event_loop_t* event_loop);
+struct blecon_timer_t* blecon_zephyr_timer_new(void);
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,7 @@
 #   Blecon Device SDK
 
 > **Note**
-> This version of the SDK works with nRF Connect SDK v2.8.0-rc1.
+> This version of the SDK works with nRF Connect SDK v2.8.0.
 
 ##  Getting started
 
@@ -9,7 +9,7 @@ Please follow [the getting started guide in our docs](https://developer.blecon.n
 
 ##  Board & Platform support
 
-This release supports the following boards along with the NCS v2.8.0-rc1 SDK and Zephyr 3.8.0 (with Nordic patches). Our `west.yml` manifest pulls in the NCS v2.8.0-rc1 SDK.
+This release supports the following boards along with the NCS v2.8.0 SDK and Zephyr 3.8.0 (with Nordic patches). Our `west.yml` manifest pulls in the NCS v2.8.0 SDK.
 We also support the legacy nRF5 SDK. We do recommend using NCS/Zephyr as the nRF5 SDK is deprecated.
 
 | Board / Platform  | NCS/Zephyr    | nRF5 SDK    |

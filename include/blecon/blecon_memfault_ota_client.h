@@ -30,6 +30,7 @@ struct blecon_memfault_ota_parameters_t {
 };
 
 struct blecon_memfault_ota_client_t {
+    struct blecon_request_parameters_t request_params;
     const struct blecon_memfault_ota_parameters_t* parameters;
     const struct blecon_memfault_ota_client_callbacks_t* callbacks;
     void* user_data;
@@ -44,6 +45,7 @@ struct blecon_memfault_ota_client_t {
 void blecon_memfault_ota_client_init(struct blecon_memfault_ota_client_t* client, 
     struct blecon_request_processor_t* request_processor,
     const struct blecon_memfault_ota_parameters_t* parameters,
+    const char* request_namespace,
     const struct blecon_memfault_ota_client_callbacks_t* callbacks,
     void* user_data
 );

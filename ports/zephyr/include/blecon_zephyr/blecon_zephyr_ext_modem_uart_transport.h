@@ -20,8 +20,7 @@ struct blecon_event_loop_t;
 
 struct blecon_zephyr_ext_modem_uart_transport_t {
     struct blecon_ext_modem_transport_t ext_modem_transport;
-    struct blecon_event_loop_t* event_loop;
-    uint32_t rx_event_id;
+    struct blecon_event_t* event;
     struct blecon_ext_modem_transport_writer_t writer;
     struct blecon_ext_modem_transport_reader_t reader;
     bool rx_frame_done;

@@ -15,6 +15,7 @@ extern "C" {
 #include "stdbool.h"
 
 #include "blecon/blecon_error.h"
+#include "blecon_event_loop.h"
 
 struct blecon_ext_modem_transport_t;
 
@@ -58,8 +59,7 @@ struct blecon_ext_modem_transport_fn_t {
 struct blecon_ext_modem_transport_t {
     struct blecon_ext_modem_t* ext_modem;
     const struct blecon_ext_modem_transport_fn_t* fns;
-    blecon_ext_modem_transport_signal_callback_t signal_callback;
-    void* signal_callback_user_data;
+    struct blecon_event_t* event;
 };
 
 static inline void blecon_ext_modem_transport_writer_init(struct blecon_ext_modem_transport_writer_t* writer, blecon_ext_modem_transport_writer_write_fn_t write_fn) {
@@ -133,9 +133,8 @@ static inline void blecon_ext_modem_transport_init(struct blecon_ext_modem_trans
     transport->fns = fns;
 }
 
-static inline void blecon_ext_modem_transport_setup(struct blecon_ext_modem_transport_t* transport, blecon_ext_modem_transport_signal_callback_t signal_callback, void* signal_callback_user_data) {
-    transport->signal_callback = signal_callback;
-    transport->signal_callback_user_data = signal_callback_user_data;
+static inline void blecon_ext_modem_transport_setup(struct blecon_ext_modem_transport_t* transport, struct blecon_event_t* event) {
+    transport->event = event;
     transport->fns->setup(transport);
 }
 
@@ -150,7 +149,7 @@ static inline bool blecon_ext_modem_transport_exchange_frames(struct blecon_ext_
 }
 
 static inline void blecon_ext_modem_transport_signal(struct blecon_ext_modem_transport_t* transport) {
-    transport->signal_callback(transport, transport->signal_callback_user_data);
+    blecon_event_signal(transport->event);
 }
 
 #ifdef __cplusplus

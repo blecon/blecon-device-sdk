@@ -26,6 +26,7 @@ struct blecon_memfault_client_send_data_op_t {
 };
 
 struct blecon_memfault_client_t {
+    struct blecon_request_parameters_t request_params;
     struct blecon_request_processor_client_t request_processor_client;
     struct blecon_memfault_t* memfault;
     struct blecon_request_t request;
@@ -38,7 +39,8 @@ struct blecon_memfault_client_t {
 void blecon_memfault_client_init(struct blecon_memfault_client_t* client, 
     struct blecon_request_processor_t* request_processor,
     struct blecon_memfault_t* memfault,
-    const uint8_t* blecon_id
+    const uint8_t* blecon_id,
+    const char* request_namespace
 );
 
 #ifdef __cplusplus

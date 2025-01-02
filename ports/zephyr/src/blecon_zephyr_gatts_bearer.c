@@ -80,7 +80,7 @@ struct blecon_bluetooth_gatt_server_t* blecon_zephyr_bluetooth_gatt_server_new(s
 
     zephyr_gatts_bearer->attr = &blecon_gatt_service.attrs[2 + zephyr_gatts->bearers_count * 3];
     zephyr_gatts_bearer->connected = false;
-    blecon_scheduler_task_init(&zephyr_gatts_bearer->close_task);
+    blecon_task_init(&zephyr_gatts_bearer->close_task, blecon_zephyr_gatts_bearer_close_callback, zephyr_gatts_bearer);
     
     zephyr_gatts->bearers_count++;
 
@@ -141,7 +141,7 @@ void blecon_zephyr_gatts_bearer_close(struct blecon_bearer_t* bearer, void* user
         return;
     }
 
-    blecon_scheduler_queue_task(&zephyr_gatts_bearer->close_task, zephyr_bluetooth->bluetooth.scheduler, blecon_zephyr_gatts_bearer_close_callback, zephyr_gatts_bearer);
+    blecon_scheduler_queue_task(zephyr_bluetooth->bluetooth.scheduler, &zephyr_gatts_bearer->close_task);
 }
 
 ssize_t blecon_zephyr_gatts_bearer_gatt_write(struct bt_conn* conn,

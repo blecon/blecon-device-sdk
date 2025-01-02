@@ -65,14 +65,14 @@ static int cmd_blecon_announce(const struct shell* sh, size_t argc, char** argv)
 static int cmd_blecon_scan(const struct shell* sh, size_t argc, char** argv);
 
 // Shell command event handlers
-static void cmd_blecon_connection_initiate_event(struct blecon_event_loop_t* event_loop, void* user_data);
-static void cmd_blecon_announce_event(struct blecon_event_loop_t* event_loop, void* user_data);
-static void cmd_blecon_scan_event(struct blecon_event_loop_t* event_loop, void* user_data);
+static void cmd_blecon_connection_initiate_event(struct blecon_event_t* event, void* user_data);
+static void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data);
+static void cmd_blecon_scan_event(struct blecon_event_t* event, void* user_data);
 
 // Event handler ids
-static uint32_t _cmd_blecon_connection_initiate_event_id = UINT32_MAX;
-static uint32_t _cmd_blecon_announce_event_id = UINT32_MAX;
-static uint32_t _cmd_blecon_scan_event_id = UINT32_MAX;
+static struct blecon_event_t* _cmd_blecon_connection_initiate_event = NULL;
+static struct blecon_event_t* _cmd_blecon_announce_event = NULL;
+static struct blecon_event_t* _cmd_blecon_scan_event = NULL;
 
 void example_on_connection(struct blecon_t* blecon) {
     printk("Connected, sending request.\r\n");
@@ -225,9 +225,9 @@ int main(void)
     struct blecon_modem_t* modem = blecon_zephyr_get_modem();
 
     // Register event ids for shell commands
-    _cmd_blecon_connection_initiate_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, cmd_blecon_connection_initiate_event, NULL);
-    _cmd_blecon_announce_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, cmd_blecon_announce_event, NULL);
-    _cmd_blecon_scan_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, cmd_blecon_scan_event, NULL);
+    _cmd_blecon_connection_initiate_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_connection_initiate_event, NULL);
+    _cmd_blecon_announce_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_announce_event, NULL);
+    _cmd_blecon_scan_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_scan_event, NULL);
 
     // Blecon
     blecon_init(&_blecon, modem);
@@ -272,29 +272,33 @@ int main(void)
 }
 
 int cmd_blecon_connection_initiate(const struct shell* sh, size_t argc, char** argv) {
-    if(_cmd_blecon_connection_initiate_event_id == UINT32_MAX) {
-        shell_print(sh, "Event id not assigned");
+    if(_cmd_blecon_connection_initiate_event == NULL) {
+        shell_print(sh, "Event not assigned");
         return -1;
     }
-    blecon_zephyr_event_loop_post_event(_event_loop, _cmd_blecon_connection_initiate_event_id);
+    blecon_event_signal(_cmd_blecon_connection_initiate_event);
     return 0;
 }
 
 int cmd_blecon_announce(const struct shell* sh, size_t argc, char** argv) {
-    if(_cmd_blecon_announce_event_id == UINT32_MAX) {
-        shell_print(sh, "Event id not assigned");
+    if(_cmd_blecon_announce_event == NULL) {
+        shell_print(sh, "Event not assigned");
         return -1;
     }
-    blecon_zephyr_event_loop_post_event(_event_loop, _cmd_blecon_announce_event_id);
+    blecon_event_signal(_cmd_blecon_announce_event);
     return 0;
 }
 
 int cmd_blecon_scan(const struct shell* sh, size_t argc, char** argv) {
-    blecon_zephyr_event_loop_post_event(_event_loop, _cmd_blecon_scan_event_id);
+    if(_cmd_blecon_scan_event == NULL) {
+        shell_print(sh, "Event not assigned");
+        return -1;
+    }
+    blecon_event_signal(_cmd_blecon_scan_event);
     return 0;
 }
 
-void cmd_blecon_connection_initiate_event(struct blecon_event_loop_t* event_loop, void* user_data) {
+void cmd_blecon_connection_initiate_event(struct blecon_event_t* event, void* user_data) {
     // Initiate connection
     if(!blecon_connection_initiate(&_blecon)) {
         printk("Failed to initiate connection\r\n");
@@ -302,7 +306,7 @@ void cmd_blecon_connection_initiate_event(struct blecon_event_loop_t* event_loop
     }
 }
 
-void cmd_blecon_announce_event(struct blecon_event_loop_t* event_loop, void* user_data) {
+void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data) {
     // Announce device ID
     if(!blecon_announce(&_blecon)) {
         printk("Failed to announce device ID\r\n");
@@ -310,7 +314,7 @@ void cmd_blecon_announce_event(struct blecon_event_loop_t* event_loop, void* use
     }
 }
 
-void cmd_blecon_scan_event(struct blecon_event_loop_t* event_loop, void* user_data) {
+void cmd_blecon_scan_event(struct blecon_event_t* event, void* user_data) {
     // Scan for nearby Blecon & Bluetooth devices
     if(!blecon_scan_start(&_blecon, true, true, 5000)) {
         printk("Failed to scan for nearby devices\r\n");

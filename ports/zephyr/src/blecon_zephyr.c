@@ -11,6 +11,7 @@
 
 #include "blecon_zephyr/blecon_zephyr_event_loop.h"
 #if defined(CONFIG_BLECON_INTERNAL_MODEM)
+#include "blecon_zephyr/blecon_zephyr_timer.h"
 #include "blecon_zephyr/blecon_zephyr_bluetooth.h"
 #include "blecon_zephyr/blecon_zephyr_crypto.h"
 #include "blecon_zephyr/blecon_zephyr_nvm.h"
@@ -41,6 +42,9 @@ struct blecon_modem_t* blecon_zephyr_get_modem(void) {
     // Init Event Loop
     struct blecon_event_loop_t* event_loop = blecon_zephyr_get_event_loop();
 
+    // Init Timer
+    struct blecon_timer_t* timer = blecon_zephyr_timer_new();
+
     // Init Bluetooth port
     struct blecon_bluetooth_t* bluetooth = blecon_zephyr_bluetooth_init(_event_loop);
 
@@ -56,6 +60,7 @@ struct blecon_modem_t* blecon_zephyr_get_modem(void) {
     // Init internal modem
     struct blecon_modem_t* modem = blecon_int_modem_create(
         event_loop,
+        timer,
         bluetooth,
         crypto,
         nvm,

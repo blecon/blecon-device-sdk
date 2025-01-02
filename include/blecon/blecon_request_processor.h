@@ -15,6 +15,7 @@ extern "C" {
 
 #include "blecon_list.h"
 #include "blecon_request.h"
+#include "blecon_task_queue.h"
 
 struct blecon_request_processor_t;
 struct blecon_request_t;
@@ -42,6 +43,9 @@ struct blecon_request_processor_fn_t {
 
 struct blecon_request_processor_t {
     const struct blecon_request_processor_fn_t* fn;
+    struct blecon_task_queue_t* task_queue;
+    struct blecon_task_t process_task;
+    bool process_task_scheduled;
     bool connected;
     size_t connection_target_count;
     struct blecon_list_t requests_list;
@@ -49,7 +53,13 @@ struct blecon_request_processor_t {
     struct blecon_list_t clients_list;
 };
 
-void blecon_request_processor_init(struct blecon_request_processor_t* processor, const struct blecon_request_processor_fn_t* fn);
+enum blecon_request_processor_event_t {
+    blecon_request_processor_event_none,
+    blecon_request_processor_event_connected,
+    blecon_request_processor_event_disconnected,
+};
+
+void blecon_request_processor_init(struct blecon_request_processor_t* processor, const struct blecon_request_processor_fn_t* fn, struct blecon_task_queue_t* task_queue);
 
 void blecon_request_processor_add_client(struct blecon_request_processor_t* processor, struct blecon_request_processor_client_t* client, const struct blecon_request_processor_client_callbacks_t* callbacks, void* user_data);
 
@@ -63,7 +73,7 @@ bool blecon_request_processor_client_is_connected(struct blecon_request_processo
 
 void blecon_request_processor_submit(struct blecon_request_processor_t* processor, struct blecon_request_t* request);
 
-void blecon_request_processor_process(struct blecon_request_processor_t* processor, bool disconnected);
+void blecon_request_processor_process(struct blecon_request_processor_t* processor, enum blecon_request_processor_event_t event);
 
 void blecon_request_processor_receive_frame(struct blecon_request_processor_t* processor, struct blecon_request_frame_t* frame);
 

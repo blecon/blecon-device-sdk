@@ -24,8 +24,10 @@ extern "C" {
 #include "blecon_modem.h"
 #include "blecon_request.h"
 #include "blecon_request_processor.h"
+#include "blecon_task_queue.h"
 
 struct blecon_event_loop_t;
+struct blecon_timer_t;
 struct blecon_bluetooth_t;
 struct blecon_crypto_t;
 struct blecon_nvm_t;
@@ -80,6 +82,7 @@ struct blecon_callbacks_t {
  * @brief Create new internal modem instance
  * 
  * @param event_loop a platform-specific event loop instance
+ * @param timer a platform-specific timer instance
  * @param bluetooth a platform-specific bluetooth instance
  * @param crypto a platform-specific crypto instance
  * @param nvm a platform-specific nvm instance
@@ -90,6 +93,7 @@ struct blecon_callbacks_t {
  * */
 struct blecon_modem_t* blecon_int_modem_create(
     struct blecon_event_loop_t* event_loop,
+    struct blecon_timer_t* timer,
     struct blecon_bluetooth_t* bluetooth,
     struct blecon_crypto_t* crypto,
     struct blecon_nvm_t* nvm,
@@ -325,6 +329,7 @@ struct blecon_t {
     bool is_setup;
     bool is_connected;
     struct blecon_modem_info_t modem_info;
+    struct blecon_task_queue_t task_queue;
     struct blecon_request_processor_t request_processor;
     struct blecon_request_processor_client_t request_processor_client;
     size_t outgoing_request_frame_queue_space_count;

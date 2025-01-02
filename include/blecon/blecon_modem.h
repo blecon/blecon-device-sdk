@@ -16,7 +16,7 @@ extern "C" {
 #include "blecon/blecon_request_frame.h"
 #include "blecon/blecon_defs.h"
 #include "blecon/blecon_bluetooth_types.h"
-#include "blecon/port/blecon_event_loop.h"
+#include "blecon/blecon_task_queue.h"
 
 struct blecon_modem_t;
 
@@ -126,6 +126,7 @@ struct blecon_modem_t {
 void blecon_modem_init(struct blecon_modem_t* modem, const struct blecon_modem_fn_t* fns, struct blecon_event_loop_t* event_loop);
 void blecon_modem_set_callbacks(struct blecon_modem_t* modem, const struct blecon_modem_callbacks_t* callbacks, void* user_data);
 bool blecon_modem_is_setup(struct blecon_modem_t* modem);
+struct blecon_event_loop_t* blecon_modem_get_event_loop(struct blecon_modem_t* modem);
 enum blecon_ret_t blecon_modem_setup(struct blecon_modem_t* modem);
 enum blecon_ret_t blecon_modem_get_info(struct blecon_modem_t* modem, struct blecon_modem_info_t* info);
 enum blecon_ret_t blecon_modem_set_application_data(struct blecon_modem_t* modem, const uint8_t* application_model_id, uint32_t application_schema_version);

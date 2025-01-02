@@ -32,7 +32,7 @@ static void download_client_on_new_chunk(struct blecon_download_client_t* client
 static void download_client_on_error(struct blecon_download_client_t* client, void* user_data);
 
 // Events
-static void ota_process_dfu_target_events(struct blecon_event_loop_t* event_loop, void* user_data);
+static void ota_process_dfu_target_events(struct blecon_event_t* event, void* user_data);
 
 // OTA thread
 static void dfu_thread_fn(void*, void*, void*);
@@ -49,7 +49,7 @@ static struct blecon_download_client_t _download_client = {0};
 static bool _downloading_update = false;
 static struct k_fifo _dfu_target_ops;
 static struct k_fifo _dfu_target_events;
-static uint32_t _process_completed_dfu_target_events_event_id = UINT32_MAX;
+static struct blecon_event_t* _process_completed_dfu_target_events_event = NULL;
 
 struct ota_dfu_target_op_t {
     bool reset;
@@ -71,7 +71,7 @@ struct ota_dfu_target_event_t {
 K_THREAD_STACK_DEFINE(_dfu_thread_stack, DFU_THREAD_STACK_SIZE);
 struct k_thread _dfu_thread;
 
-void ota_init(struct blecon_event_loop_t* event_loop, struct blecon_t* blecon) {
+void ota_init(struct blecon_event_loop_t* event_loop, struct blecon_t* blecon, const char* request_namespace) {
     _event_loop = event_loop;
     _blecon = blecon;
 
@@ -86,7 +86,7 @@ void ota_init(struct blecon_event_loop_t* event_loop, struct blecon_t* blecon) {
         .on_error = memfault_ota_client_on_error
     };
     blecon_memfault_ota_client_init(&_memfault_ota_client, blecon_get_request_processor(_blecon),
-        &_memfault_ota_parameters, &memfault_ota_client_callbacks, NULL);
+        &_memfault_ota_parameters, request_namespace, &memfault_ota_client_callbacks, NULL);
 
     // Check for update
     blecon_memfault_ota_client_check_for_update(&_memfault_ota_client);
@@ -96,7 +96,7 @@ void ota_init(struct blecon_event_loop_t* event_loop, struct blecon_t* blecon) {
     k_fifo_init(&_dfu_target_events);
 
     // Register event
-    _process_completed_dfu_target_events_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, ota_process_dfu_target_events, NULL);
+    _process_completed_dfu_target_events_event = blecon_event_loop_register_event(_event_loop, ota_process_dfu_target_events, NULL);
 
     // Start thread
     k_thread_create(&_dfu_thread, _dfu_thread_stack, K_THREAD_STACK_SIZEOF(_dfu_thread_stack),
@@ -173,7 +173,7 @@ void download_client_on_error(struct blecon_download_client_t* client, void* use
     _downloading_update = false;
 }
 
-void ota_process_dfu_target_events(struct blecon_event_loop_t* event_loop, void* user_data) {
+void ota_process_dfu_target_events(struct blecon_event_t* event, void* user_data) {
     do {
         struct ota_dfu_target_event_t* event = k_fifo_get(&_dfu_target_events, K_NO_WAIT);
         if(event == NULL) {
@@ -232,6 +232,6 @@ void dfu_thread_fn(void*, void*, void*) {
         free(op);
 
         // Signal event loop
-        blecon_zephyr_event_loop_post_event(_event_loop, _process_completed_dfu_target_events_event_id);
+        blecon_event_on_raised(_process_completed_dfu_target_events_event);
     }
 }

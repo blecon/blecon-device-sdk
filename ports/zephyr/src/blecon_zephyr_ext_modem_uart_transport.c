@@ -25,7 +25,7 @@ static bool blecon_zephyr_ext_modem_uart_transport_write_bytes(struct blecon_zep
 static bool blecon_zephyr_ext_modem_uart_transport_write_done(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport);
 static bool blecon_zephyr_ext_modem_uart_transport_write_char(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, char c);
 
-static void blecon_zephyr_ext_modem_uart_transport_rx_event(struct blecon_event_loop_t* event_loop, void* user_data);
+static void blecon_zephyr_ext_modem_uart_transport_rx_event(struct blecon_event_t* event, void* user_data);
 
 static void blecon_zephyr_ext_modem_uart_transport_interrupt_handler(const struct device* dev, void* user_data);
 
@@ -39,9 +39,8 @@ void blecon_zephyr_ext_modem_uart_transport_init(struct blecon_zephyr_ext_modem_
     // Initialise transport
     blecon_ext_modem_transport_init(&ext_modem_uart_transport->ext_modem_transport, &blecon_zephyr_ext_modem_uart_transport_functions);
 
-    // Store event loop and register event id
-    ext_modem_uart_transport->event_loop = event_loop;
-    ext_modem_uart_transport->rx_event_id = blecon_zephyr_event_loop_assign_event(event_loop, blecon_zephyr_ext_modem_uart_transport_rx_event, ext_modem_uart_transport);
+    // Register event
+    ext_modem_uart_transport->event = blecon_event_loop_register_event(event_loop, blecon_zephyr_ext_modem_uart_transport_rx_event, ext_modem_uart_transport);
 
     // Initialise transport writer
     blecon_ext_modem_transport_writer_init(&ext_modem_uart_transport->writer, blecon_zephyr_ext_modem_uart_transport_writer_write);
@@ -322,7 +321,7 @@ bool blecon_zephyr_ext_modem_uart_transport_write_char(struct blecon_zephyr_ext_
     return true;
 }
 
-void blecon_zephyr_ext_modem_uart_transport_rx_event(struct blecon_event_loop_t* event_loop, void* user_data) {
+void blecon_zephyr_ext_modem_uart_transport_rx_event(struct blecon_event_t* event, void* user_data) {
     struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport = (struct blecon_zephyr_ext_modem_uart_transport_t*) user_data;
 
     // Check that it's an event
@@ -396,7 +395,7 @@ void blecon_zephyr_ext_modem_uart_transport_interrupt_handler(const struct devic
     }
 
     // Raise RX event
-    blecon_zephyr_event_loop_post_event(ext_modem_uart_transport->event_loop, ext_modem_uart_transport->rx_event_id);
+    blecon_event_signal(ext_modem_uart_transport->event);
 
     // Signal using semaphore
     k_sem_give(&ext_modem_uart_transport->rx_sem);

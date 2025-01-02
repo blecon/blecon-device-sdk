@@ -19,6 +19,7 @@ config BLECON_INTERNAL_MODEM
     bool "Blecon internal modem"
     imply BLECON_INTERNAL_MODEM_NFC
     select BLECON_PORT_EVENT_LOOP
+    select BLECON_PORT_TIMER
     select BLECON_PORT_BLUETOOTH
     select BLECON_PORT_CRYPTO
     select BLECON_PORT_NVM
@@ -108,6 +109,10 @@ config BLECON_PORT_EVENT_LOOP
     bool "Blecon event loop port"
     default n
     depends on EVENTS
+
+config BLECON_PORT_TIMER
+    bool "Blecon timer"
+    default n
 
 config BLECON_PORT_NFC
     bool "Blecon NFC port"

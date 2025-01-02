@@ -86,7 +86,7 @@ struct blecon_bluetooth_gatt_server_t* blecon_nrf5_bluetooth_gatt_server_new(str
 
     nrf5_gatts_bearer->connected = false;
     nrf5_gatts_bearer->pending_notifications_count = 0;
-    blecon_scheduler_task_init(&nrf5_gatts_bearer->close_task);
+    blecon_task_init(&nrf5_gatts_bearer->close_task, blecon_nrf5_gatts_bearer_close_callback, nrf5_gatts_bearer);
 
     nrf5_gatts->bearers_count++;
 
@@ -146,7 +146,7 @@ void blecon_nrf5_gatts_bearer_close(struct blecon_bearer_t* bearer, void* user_d
         return;
     }
 
-    blecon_scheduler_queue_task(&nrf5_gatts_bearer->close_task, nrf5_bluetooth->bluetooth.scheduler, blecon_nrf5_gatts_bearer_close_callback, nrf5_gatts_bearer);
+    blecon_scheduler_queue_task(nrf5_bluetooth->bluetooth.scheduler, &nrf5_gatts_bearer->close_task);
 }
 
 void blecon_nrf5_gatts_bearer_on_ble_evt(ble_evt_t const* p_ble_evt, void* p_context) {

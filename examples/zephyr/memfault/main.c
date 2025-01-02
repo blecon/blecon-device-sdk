@@ -24,6 +24,8 @@
 
 #include "memfault/components.h"
 
+#define MEMFAULT_REQUEST_NAMESPACE "memfault"
+
 static struct blecon_event_loop_t* _event_loop = NULL;
 static struct blecon_t _blecon = {0};
 static struct blecon_memfault_client_t _memfault_client = {0};
@@ -47,12 +49,12 @@ static int cmd_blecon_announce(const struct shell* sh, size_t argc, char** argv)
 static int cmd_crash(const struct shell* sh, size_t argc, char** argv);
 
 // Shell command event handlers
-static void cmd_blecon_memfault_sync_event(struct blecon_event_loop_t* event_loop, void* user_data);
-static void cmd_blecon_announce_event(struct blecon_event_loop_t* event_loop, void* user_data);
+static void cmd_blecon_memfault_sync_event(struct blecon_event_t* event, void* user_data);
+static void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data);
 
 // Event handler ids
-static uint32_t _cmd_blecon_memfault_sync_event_id = UINT32_MAX;
-static uint32_t _cmd_blecon_announce_event_id = UINT32_MAX;
+static struct blecon_event_t* _cmd_blecon_memfault_sync_event = NULL;
+static struct blecon_event_t* _cmd_blecon_announce_event = NULL;
 
 void example_on_connection(struct blecon_t* blecon) {
     printk("Connected\r\n");
@@ -82,8 +84,8 @@ int main(void)
     struct blecon_modem_t* modem = blecon_zephyr_get_modem();
 
     // Register event ids for shell commands
-    _cmd_blecon_memfault_sync_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, cmd_blecon_memfault_sync_event, NULL);
-    _cmd_blecon_announce_event_id = blecon_zephyr_event_loop_assign_event(_event_loop, cmd_blecon_announce_event, NULL);
+    _cmd_blecon_memfault_sync_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_memfault_sync_event, NULL);
+    _cmd_blecon_announce_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_announce_event, NULL);
 
     // Memfault
     struct blecon_memfault_t* memfault = blecon_zephyr_memfault_init();
@@ -101,7 +103,7 @@ int main(void)
         printk("Failed to get identity\r\n");
         return 1;
     }
-    blecon_memfault_client_init(&_memfault_client, blecon_get_request_processor(&_blecon), memfault, blecon_id);
+    blecon_memfault_client_init(&_memfault_client, blecon_get_request_processor(&_blecon), memfault, blecon_id, MEMFAULT_REQUEST_NAMESPACE);
 
     // Print firmware version
     sMemfaultDeviceInfo mftlt_device_info = {0};
@@ -118,7 +120,7 @@ int main(void)
     printk("Device URL: %s\r\n", blecon_url);
 
     // Init OTA module
-    ota_init(_event_loop, &_blecon);
+    ota_init(_event_loop, &_blecon, MEMFAULT_REQUEST_NAMESPACE);
 
     // Initiate connection
     if(!blecon_connection_initiate(&_blecon)) {
@@ -134,20 +136,20 @@ int main(void)
 }
 
 int cmd_blecon_memfault_sync(const struct shell* sh, size_t argc, char** argv) {
-    if(_cmd_blecon_memfault_sync_event_id == UINT32_MAX) {
+    if(_cmd_blecon_memfault_sync_event == NULL) {
         shell_print(sh, "Event id not assigned");
         return -1;
     }
-    blecon_zephyr_event_loop_post_event(_event_loop, _cmd_blecon_memfault_sync_event_id);
+    blecon_event_signal(_cmd_blecon_memfault_sync_event);
     return 0;
 }
 
 int cmd_blecon_announce(const struct shell* sh, size_t argc, char** argv) {
-    if(_cmd_blecon_announce_event_id == UINT32_MAX) {
+    if(_cmd_blecon_announce_event == NULL) {
         shell_print(sh, "Event id not assigned");
         return -1;
     }
-    blecon_zephyr_event_loop_post_event(_event_loop, _cmd_blecon_announce_event_id);
+    blecon_event_signal(_cmd_blecon_announce_event);
     return 0;
 }
 
@@ -158,7 +160,7 @@ int cmd_crash(const struct shell* sh, size_t argc, char** argv) {
     return 0;
 }
 
-void cmd_blecon_memfault_sync_event(struct blecon_event_loop_t* event_loop, void* user_data) {
+void cmd_blecon_memfault_sync_event(struct blecon_event_t* event, void* user_data) {
     // Initiate connection
     if(!blecon_connection_initiate(&_blecon)) {
         printk("Failed to initiate connection\r\n");
@@ -169,7 +171,7 @@ void cmd_blecon_memfault_sync_event(struct blecon_event_loop_t* event_loop, void
     ota_check_for_update();
 }
 
-void cmd_blecon_announce_event(struct blecon_event_loop_t* event_loop, void* user_data) {
+void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data) {
     // Announce device ID
     if(!blecon_announce(&_blecon)) {
         printk("Failed to announce device ID\r\n");

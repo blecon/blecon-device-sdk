@@ -7,6 +7,7 @@ target_sources(blecon_nrf5 PRIVATE
   src/blecon_nrf5_bluetooth.c
   src/blecon_nrf5_crypto.c
   src/blecon_nrf5_event_loop.c
+  src/blecon_nrf5_timer.c
   src/blecon_nrf5_gatts_bearer.c
   src/blecon_nrf5_nfc.c
   src/blecon_nrf5_nvm.c

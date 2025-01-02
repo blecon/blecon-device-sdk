@@ -18,6 +18,12 @@ target_sources(blecon_zephyr PRIVATE
 )
 endif()
 
+if(CONFIG_BLECON_PORT_TIMER)
+target_sources(blecon_zephyr PRIVATE
+  src/blecon_zephyr_timer.c
+)
+endif()
+
 if(CONFIG_BLECON_PORT_CRYPTO)
 target_sources(blecon_zephyr PRIVATE
   src/blecon_zephyr_crypto.c

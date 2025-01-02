@@ -36,13 +36,14 @@
 #include "blecon_nrf5/blecon_nrf5_bluetooth.h"
 #include "blecon_nrf5/blecon_nrf5_crypto.h"
 #include "blecon_nrf5/blecon_nrf5_event_loop.h"
+#include "blecon_nrf5/blecon_nrf5_timer.h"
 #include "blecon_nrf5/blecon_nrf5_nfc.h"
 #include "blecon_nrf5/blecon_nrf5_nvm.h"
 
 #include "blecon_app.h"
 
 // Note: BLE events are empty
-#define SCHED_MAX_EVENT_DATA_SIZE       APP_TIMER_SCHED_EVENT_DATA_SIZE             /**< Maximum size of scheduler events. */
+#define SCHED_MAX_EVENT_DATA_SIZE       sizeof(void*)                               /**< Maximum size of scheduler events. */
 #define SCHED_QUEUE_SIZE                10                                          /**< Maximum number of events in the scheduler queue. More is needed in case of Serialization. */
 #define DEAD_BEEF                           0xDEADBEEF 
 
@@ -179,6 +180,9 @@ int main(void)
 
     // Event loop
     struct blecon_event_loop_t* event_loop = blecon_nrf5_event_loop_init();
+
+    // Timer
+    struct blecon_timer_t* timer = blecon_nrf5_timer_init();
     
     // Bluetooth
     struct blecon_bluetooth_t* bluetooth = blecon_nrf5_bluetooth_init();
@@ -195,6 +199,7 @@ int main(void)
     // Init internal modem
     struct blecon_modem_t* modem = blecon_int_modem_create(
         event_loop,
+        timer,
         bluetooth,
         crypto,
         nvm,
