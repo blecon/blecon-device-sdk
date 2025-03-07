@@ -5,6 +5,7 @@
 config BLECON
     bool "Blecon library"
     default n
+    select REQUIRES_STD_C11
     help
         Enable the Blecon device library
 
@@ -151,6 +152,9 @@ config BLECON_MEMFAULT_SOFTWARE_VERSION
 config BLECON_MEMFAULT_SOFTWARE_TYPE
     string "Software Type"
 
+config BLECON_MEMFAULT_DEFAULT_DEVICE_INFO
+    bool "Enable default memfault_platform_get_device_info() implementation"
+    default y
 
 endif
 

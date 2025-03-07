@@ -9,7 +9,7 @@ The example requires CMake and the Arm GNU toolchain to be compiled.
 Configure CMake from the SDK's root directory:
 ```bash
 $ mkdir build && cd build
-$ cmake --fresh -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBLECON_NRF5_PORT=ON -DBLECON_NRF5_BOARD=NRF52840_DK ..
+$ cmake --fresh -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBLECON_NRF5_PORT=ON -DBLECON_NRF5_BOARD=nrf52840dk ..
 ```
 
 The example uses the S140 (nRF52840) or S113 (nRF52833) Softdevice which needs to be flashed as well. It is downloaded as part of the build process and located within your build directory:

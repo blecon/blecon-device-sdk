@@ -55,8 +55,8 @@ struct blecon_bluetooth_fn_t {
 
 struct blecon_bluetooth_callbacks_t {
     void (*on_new_connection)(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_advertising_set_t* adv_set, void* user_data);
-    void (*on_advertising_report)(struct blecon_bluetooth_t* bluetooth, 
-        const struct blecon_bluetooth_advertising_info_t* info, 
+    void (*on_advertising_report)(struct blecon_bluetooth_t* bluetooth,
+        const struct blecon_bluetooth_advertising_info_t* info,
         const struct blecon_bluetooth_advertising_data_t* data,
         void* user_data);
 };
@@ -103,7 +103,7 @@ struct blecon_bluetooth_advertising_data_t {
 
 struct blecon_bluetooth_advertising_set_t {
     struct blecon_bluetooth_t* bluetooth;
-    // void* user_data;
+    void* user_data;
 };
 
 struct blecon_bluetooth_connection_callbacks_t {
@@ -144,9 +144,10 @@ static inline void blecon_bluetooth_shutdown(struct blecon_bluetooth_t* bluetoot
     bluetooth->fns->shutdown(bluetooth);
 }
 
-static inline struct blecon_bluetooth_advertising_set_t* blecon_bluetooth_advertising_set_new(struct blecon_bluetooth_t* bluetooth) {
+static inline struct blecon_bluetooth_advertising_set_t* blecon_bluetooth_advertising_set_new(struct blecon_bluetooth_t* bluetooth, void* user_data) {
     struct blecon_bluetooth_advertising_set_t* adv_set = bluetooth->fns->advertising_set_new(bluetooth);
     adv_set->bluetooth = bluetooth;
+    adv_set->user_data = user_data;
     return adv_set;
 }
 

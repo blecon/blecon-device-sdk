@@ -254,13 +254,13 @@ target_compile_definitions(nrf-sdk-app INTERFACE
 endif()
 
 # Board
-if(BLECON_NRF5_BOARD STREQUAL "NRF52_DK")
+if(BLECON_NRF5_BOARD STREQUAL "nrf52dk")
     target_compile_definitions(nrf-sdk-base INTERFACE BOARD_PCA10040)
     set(NORDIC_BOARD_SUPPORTS_NFC 1 CACHE INTERNAL "")
-elseif(BLECON_NRF5_BOARD STREQUAL "NRF52840_DK")
+elseif(BLECON_NRF5_BOARD STREQUAL "nrf52840dk")
     target_compile_definitions(nrf-sdk-base INTERFACE BOARD_PCA10056)
     set(NORDIC_BOARD_SUPPORTS_NFC 1 CACHE INTERNAL "")
-elseif(BLECON_NRF5_BOARD STREQUAL "NRF52833_DK")
+elseif(BLECON_NRF5_BOARD STREQUAL "nrf52833dk")
     target_compile_definitions(nrf-sdk-base INTERFACE BOARD_PCA10100)
     set(NORDIC_BOARD_SUPPORTS_NFC 1 CACHE INTERNAL "")
 else()

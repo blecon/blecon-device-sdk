@@ -25,6 +25,8 @@ enum blecon_bluetooth_phy_t {
     blecon_bluetooth_phy_coded = 2
 };
 
+bool blecon_bluetooth_addr_eq(const struct blecon_bluetooth_addr_t addr, const struct blecon_bluetooth_addr_t other);
+
 struct blecon_bluetooth_phy_mask_t {
     bool phy_1m : 1;
     bool phy_2m : 1;

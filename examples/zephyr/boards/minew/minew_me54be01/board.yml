@@ -1,0 +1,10 @@
+board:
+  name: minew_me54be01
+  vendor: nordic
+  socs:
+  - name: nrf54l15
+    variants:
+    - name: xip
+      cpucluster: cpuflpr
+    - name: ns
+      cpucluster: cpuapp

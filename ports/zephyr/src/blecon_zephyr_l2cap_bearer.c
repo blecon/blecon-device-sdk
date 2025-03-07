@@ -143,15 +143,36 @@ void blecon_zephyr_l2cap_bearer_send(struct blecon_bearer_t* bearer, struct blec
         blecon_buffer_free(buf);
         return;
     }
-    
-    struct net_buf* z_buf = net_buf_alloc(&l2cap_tx_pool, K_FOREVER);
-	net_buf_reserve(z_buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
-	net_buf_add_mem(z_buf, buf.data, buf.sz);
+
+    /* This allocation has been problematic: we have seen deadlocks happen if the
+       second argument is K_FOREVER, so therefore it is K_NO_WAIT instead. If we
+       fail to allocate a buffer, we just crash with the assert below instead. */
+    struct net_buf* z_buf = net_buf_alloc(&l2cap_tx_pool, K_NO_WAIT);
+
+    blecon_assert( z_buf != NULL );
+
+    net_buf_reserve(z_buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
+    net_buf_add_mem(z_buf, buf.data, buf.sz);
 
     int ret = bt_l2cap_chan_send(&l2cap_bearer->l2cap_chan.chan, z_buf);
 
     if (ret == -ENOTCONN) {
         // Other end closing the connection is not an error
+
+        /*
+            We need to deallocate the z_buf buffer here, as the documentation
+            (https://docs.zephyrproject.org/apidoc/latest/group__bt__l2cap.html#ga97b7909749667f910f83e6fcb54495c3)
+            states:
+
+            Note
+                Buffer ownership is transferred to the stack in case of success,
+                in case of an error the caller retains the ownership of the buffer.
+
+            In Zephyr, we don't deallocate buffers immediately, but only reduce
+            the reference count with net_buf_unref() - the buffer will eventually
+            be deallocated once the reference count reaches 0.
+        */
+        net_buf_unref(z_buf);
     }
     else {
         // Zephyr now returns the number of bytes sent which can be 0 if we've run out of credits,

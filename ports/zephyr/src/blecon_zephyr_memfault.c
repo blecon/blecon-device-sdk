@@ -67,9 +67,11 @@ bool memfault_get_chunk_data(struct blecon_memfault_t* memfault, uint8_t* buf, s
 }
 
 // Memfault integration
+#if CONFIG_BLECON_MEMFAULT_DEFAULT_DEVICE_INFO
 void memfault_platform_get_device_info(sMemfaultDeviceInfo *info) {
     info->device_serial = memfault_device_uuid_str;
     info->hardware_version = CONFIG_BLECON_MEMFAULT_HARDWARE_VERSION;
     info->software_version = CONFIG_BLECON_MEMFAULT_SOFTWARE_VERSION;
     info->software_type = CONFIG_BLECON_MEMFAULT_SOFTWARE_TYPE;
 }
+#endif /* CONFIG_BLECON_MEMFAULT_DEFAULT_DEVICE_INFO */
