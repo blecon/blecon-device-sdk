@@ -390,6 +390,23 @@ void blecon_zephyr_bluetooth_on_connected(struct bt_conn* conn, uint8_t conn_err
         return;
     }
 
+    // Lock event loop
+    blecon_event_loop_lock(zephyr_bluetooth->event_loop);
+
+    // Find advertising set based on connection identity
+    struct blecon_zephyr_bluetooth_advertising_set_t* zephyr_adv_set = NULL;
+    for(size_t idx = 0; idx < zephyr_bluetooth->adv_sets_count; idx++) {
+        if(zephyr_bluetooth->adv_sets[idx].identity == conn_info.id) {
+            zephyr_adv_set = &zephyr_bluetooth->adv_sets[idx];
+            break;
+        }
+    }
+
+    if(zephyr_adv_set == NULL) {
+        blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+        return;
+    }
+
     // Update connection params
     const static struct bt_le_conn_param conn_params = {
         .interval_min = 12, // 1.25 ms units = 15 ms
@@ -407,19 +424,6 @@ void blecon_zephyr_bluetooth_on_connected(struct bt_conn* conn, uint8_t conn_err
     };
     ret = bt_conn_le_data_len_update(conn, &len_params);
     blecon_assert(ret == 0);
-
-    // Lock event loop
-    blecon_event_loop_lock(zephyr_bluetooth->event_loop);
-
-    // Find advertising set based on connection identity
-    struct blecon_zephyr_bluetooth_advertising_set_t* zephyr_adv_set = NULL;
-    for(size_t idx = 0; idx < zephyr_bluetooth->adv_sets_count; idx++) {
-        if(zephyr_bluetooth->adv_sets[idx].identity == conn_info.id) {
-            zephyr_adv_set = &zephyr_bluetooth->adv_sets[idx];
-            break;
-        }
-    }
-    blecon_assert(zephyr_adv_set != NULL);
 
     // Init
     blecon_bluetooth_connection_init(&zephyr_bluetooth->connection.connection, &zephyr_bluetooth->bluetooth);

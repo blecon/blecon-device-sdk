@@ -16,20 +16,12 @@
 #include "blecon_zephyr/blecon_zephyr.h"
 #include "blecon_zephyr/blecon_zephyr_event_loop.h"
 
-#define CONCURRENT_SEND_OPS_COUNT 2
-
-struct example_send_op_t {
-    struct blecon_request_send_data_op_t op;
-    bool busy;
-};
-
 static struct blecon_event_loop_t* _event_loop = NULL;
 static struct blecon_t _blecon = {0};
 static struct blecon_request_t _request = {0};
-static struct example_send_op_t _send_ops[CONCURRENT_SEND_OPS_COUNT] = {0};
+static struct blecon_request_send_data_op_t _send_op = {0};
 static struct blecon_request_receive_data_op_t _receive_op = {0};
-static uint8_t _outgoing_data_buffer[CONFIG_LARGE_REQUEST_EXAMPLE_BUFFER_SZ] = {0}; // Large buffer
-static size_t _outgoing_data_buffer_pos = 0;
+static uint8_t _outgoing_data_buffer[64] = {0};
 static uint8_t _incoming_data_buffer[64] = {0};
 
 // Blecon callbacks
@@ -58,40 +50,34 @@ const static struct blecon_request_callbacks_t blecon_request_callbacks = {
     .on_data_received = example_request_on_data_received
 };
 
-// Internal functions
-static void example_send_data(void);
-
 // Shell commands
 static int cmd_blecon_connection_initiate(const struct shell* sh, size_t argc, char** argv);
-static int cmd_blecon_send_data(const struct shell* sh, size_t argc, char** argv);
 static int cmd_blecon_announce(const struct shell* sh, size_t argc, char** argv);
 
 // Shell command event handlers
 static void cmd_blecon_connection_initiate_event(struct blecon_event_t* event, void* user_data);
-static void cmd_blecon_send_data_event(struct blecon_event_t* event, void* user_data);
 static void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data);
 
-// Event handler ids
+// Event handlers
 static struct blecon_event_t* _cmd_blecon_connection_initiate_event = NULL;
-static struct blecon_event_t* _cmd_blecon_send_data_event = NULL;
 static struct blecon_event_t* _cmd_blecon_announce_event = NULL;
 
-static void send_data(struct blecon_t* blecon) {
-    printk("Connected, sending request.\r\n");
+void example_on_connection(struct blecon_t* blecon) {
+    printk("Blecon connected, sending request.\r\n");
 
     // Clean-up request
     blecon_request_cleanup(&_request);
     
-    // Reset outgoing buffer position
-    _outgoing_data_buffer_pos = 0;
+    // Create message
+    sprintf((char*)_outgoing_data_buffer, "Hello blecon!");
 
-    // Reset send operations
-    for(size_t p = 0; p < CONCURRENT_SEND_OPS_COUNT; p++) {
-        _send_ops[p].busy = false;
+    // Create send data operation
+    if(!blecon_request_send_data(&_send_op, &_request, _outgoing_data_buffer,
+        strlen((char*)_outgoing_data_buffer), true, NULL)) {
+        printk("Failed to send data\r\n");
+        blecon_request_cleanup(&_request);
+        return;
     }
-    
-    // Queue initial send operations
-    example_send_data();
 
     // Create receive data operation
     if(!blecon_request_receive_data(&_receive_op, &_request, NULL)) {
@@ -104,12 +90,8 @@ static void send_data(struct blecon_t* blecon) {
     blecon_submit_request(&_blecon, &_request);
 }
 
-void example_on_connection(struct blecon_t* blecon) {
-    send_data(blecon);
-}
-
 void example_on_disconnection(struct blecon_t* blecon) {
-    printk("Disconnected\r\n");
+    printk("Blecon disconnected\r\n");
 }
 
 void example_on_time_update(struct blecon_t* blecon) {
@@ -126,24 +108,23 @@ void example_request_on_data_received(struct blecon_request_receive_data_op_t* r
     }
     printk("Data received\r\n");
 
+    static char message[64] = {0};
+    memset(message, 0, sizeof(message));
+    memcpy(message, data, sz);
+
+    printk("Frame: %s\r\n", message);
+
     if(finished) {
         printk("All received\r\n");
     }
 }
 
 void example_request_on_data_sent(struct blecon_request_send_data_op_t* send_data_op, bool data_sent) {
-    // Mark send operation as not busy
-    struct example_send_op_t* op = (struct example_send_op_t*)blecon_request_send_data_op_get_user_data(send_data_op);
-    op->busy = false;
-
     if(!data_sent) {
         printk("Failed to send data\r\n");
         return;
     }
     printk("Data sent\r\n");
-
-    // Send more chunks if needed
-    example_send_data();
 }
 
 uint8_t* example_request_alloc_incoming_data_buffer(struct blecon_request_receive_data_op_t* receive_data_op, size_t sz) {
@@ -163,59 +144,13 @@ void example_request_on_closed(struct blecon_request_t* request) {
     blecon_connection_terminate(&_blecon);
 }
 
-void example_send_data(void) {
-    for(size_t p = 0; p < CONCURRENT_SEND_OPS_COUNT; p++) {
-        struct example_send_op_t* op = &_send_ops[p];
-        if(op->busy) {
-            continue;
-        }
-        op->busy = true;
-
-        if(_outgoing_data_buffer_pos >= sizeof(_outgoing_data_buffer)) {
-            // Already finished
-            break;
-        }
-
-        size_t chunk_sz = 4096;
-        if(_outgoing_data_buffer_pos + chunk_sz > sizeof(_outgoing_data_buffer)) {
-            chunk_sz = sizeof(_outgoing_data_buffer) - _outgoing_data_buffer_pos;
-        }
-
-        bool finished = false;
-        if(_outgoing_data_buffer_pos + chunk_sz >= sizeof(_outgoing_data_buffer)) {
-            finished = true;
-        }
-
-        printk("Sending chunk of %u bytes\r\n", chunk_sz);
-
-        // Create send data operation
-        if(!blecon_request_send_data(&op->op, &_request, _outgoing_data_buffer + _outgoing_data_buffer_pos, chunk_sz, finished, op)) {
-            printk("Failed to send data\r\n");
-            blecon_request_cleanup(&_request);
-            return;
-        }
-
-        _outgoing_data_buffer_pos += chunk_sz;
-
-        if(finished) {
-            printk("All sent\r\n");
-            break;
-        }
-    }
-}
-
 int main(void)
 {
 #if defined(CONFIG_USB_CDC_ACM)
     // Give a chance to UART to connect
     k_sleep(K_MSEC(1000));
 #endif
-
-    // Set up the _outgoing_data_buffer with a known pattern
-    for(size_t p = 0; p < sizeof(_outgoing_data_buffer); p++) {
-        _outgoing_data_buffer[p] = (uint8_t)p;
-    }
-
+   
     // Get event loop
     _event_loop = blecon_zephyr_get_event_loop();
 
@@ -224,7 +159,6 @@ int main(void)
 
     // Register event ids for shell commands
     _cmd_blecon_connection_initiate_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_connection_initiate_event, NULL);
-    _cmd_blecon_send_data_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_send_data_event, NULL);
     _cmd_blecon_announce_event = blecon_event_loop_register_event(_event_loop, cmd_blecon_announce_event, NULL);
 
     // Blecon
@@ -237,11 +171,11 @@ int main(void)
 
     // Init request
     const static struct blecon_request_parameters_t request_params = {
-        .namespace = "mynamespace",
-        .method = "upload",
-        .oneway = true,
-        .request_content_type = NULL,
-        .response_content_type = NULL,
+        .namespace = "global:blecon_util",
+        .method = "echo",
+        .oneway = false,
+        .request_content_type = "text/plain",
+        .response_content_type = "text/plain",
         .response_mtu = sizeof(_incoming_data_buffer),
         .callbacks = &blecon_request_callbacks,
         .user_data = NULL
@@ -271,25 +205,16 @@ int main(void)
 
 int cmd_blecon_connection_initiate(const struct shell* sh, size_t argc, char** argv) {
     if(_cmd_blecon_connection_initiate_event == NULL) {
-        shell_print(sh, "Event id not assigned");
+        shell_print(sh, "Event not assigned");
         return -1;
     }
     blecon_event_signal(_cmd_blecon_connection_initiate_event);
     return 0;
 }
 
-int cmd_blecon_send_data(const struct shell* sh, size_t argc, char** argv) {
-    if(_cmd_blecon_send_data_event == NULL) {
-        shell_print(sh, "Event id not assigned");
-        return -1;
-    }
-    blecon_event_signal(_cmd_blecon_send_data_event);
-    return 0;
-}
-
 int cmd_blecon_announce(const struct shell* sh, size_t argc, char** argv) {
     if(_cmd_blecon_announce_event == NULL) {
-        shell_print(sh, "Event id not assigned");
+        shell_print(sh, "Event not assigned");
         return -1;
     }
     blecon_event_signal(_cmd_blecon_announce_event);
@@ -304,20 +229,6 @@ void cmd_blecon_connection_initiate_event(struct blecon_event_t* event, void* us
     }
 }
 
-void cmd_blecon_send_data_event(struct blecon_event_t* event, void* user_data) {
-    // If we are already connected, send data immediately
-    if(blecon_is_connected(&_blecon)) {
-        send_data(&_blecon);
-        return;
-    } else {
-        // Initiate connection - send_data will be called by example_on_connection when connected
-        if(!blecon_connection_initiate(&_blecon)) {
-            printk("Failed to initiate connection\r\n");
-            return;
-        }
-    }
-}
-
 void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data) {
     // Announce device ID
     if(!blecon_announce(&_blecon)) {
@@ -329,7 +240,6 @@ void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data) {
 
 SHELL_STATIC_SUBCMD_SET_CREATE(blecon,
 	SHELL_CMD(connection_initiate, NULL, "Initiate connection to Blecon network.", cmd_blecon_connection_initiate),
-    SHELL_CMD(send_data, NULL, "Send data to Blecon network.", cmd_blecon_send_data),
     SHELL_CMD(announce, NULL, "Announce Blecon device ID to nearby hotspots.", cmd_blecon_announce),
     SHELL_SUBCMD_SET_END
 );

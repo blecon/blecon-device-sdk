@@ -58,9 +58,19 @@ struct blecon_bearer_t* blecon_zephyr_bluetooth_connection_get_l2cap_server_bear
 
 int blecon_zephyr_l2cap_server_accept(struct bt_conn *conn, struct bt_l2cap_server *server, struct bt_l2cap_chan **chan) {
     struct blecon_zephyr_l2cap_server_t* zephyr_l2cap_server = CONTAINER_OF(server, struct blecon_zephyr_l2cap_server_t, z_l2cap_server);
+    struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = (struct blecon_zephyr_bluetooth_t*) zephyr_l2cap_server->l2cap_server.bluetooth;
+
     if( blecon_zephyr_l2cap_bearer_is_connected(&zephyr_l2cap_server->l2cap_bearer) ) {
         return -ENOMEM;
     }
+    
+    // Ignore if not a Blecon connection
+    blecon_event_loop_lock(zephyr_bluetooth->event_loop);
+    if(conn != zephyr_bluetooth->connection.conn) {
+        blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+        return -EIO;
+    }
+    blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
 
     blecon_zephyr_l2cap_bearer_server_accept(&zephyr_l2cap_server->l2cap_bearer, conn, chan);
 

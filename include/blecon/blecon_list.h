@@ -56,6 +56,14 @@ bool blecon_list_is_empty(struct blecon_list_t* list);
 
 size_t blecon_list_size(struct blecon_list_t* list);
 
+// Split list into two lists at node (node is included in the first list)
+void blecon_list_split_after(struct blecon_list_t* list, struct blecon_list_node_t* node, struct blecon_list_t* first, struct blecon_list_t* second);
+
+// Split list into two lists at node (node is included in the second list)
+void blecon_list_split_before(struct blecon_list_t* list, struct blecon_list_node_t* node, struct blecon_list_t* first, struct blecon_list_t* second);
+
+void blecon_list_concat(struct blecon_list_t* first, struct blecon_list_t* second, struct blecon_list_t* out);
+
 #ifdef __cplusplus
 }
 #endif

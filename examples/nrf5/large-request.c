@@ -69,7 +69,7 @@ static void example_send_data(void);
 // Utility macro
 static inline void blecon_check_error(enum blecon_ret_t code) { 
     if(code != blecon_ok) {
-        NRF_LOG_ERROR("Blecon modem error: %x\r\n", code);
+        NRF_LOG_ERROR("Blecon modem error: 0x%x\r\n", code);
         blecon_fatal_error();
     }
 }

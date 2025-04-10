@@ -232,8 +232,8 @@ bool blecon_get_url(struct blecon_t* blecon, char* url, size_t max_sz);
 bool blecon_get_identity(struct blecon_t* blecon, uint8_t* uuid);
 
 /**
- * @brief Get the current time
- * 
+ * @brief Get the current global synchronized time
+ *
  * @param blecon the blecon instance
  * @param time_valid a pointer to a bool which is set to true if the time is valid
  * @param utc_time_ms_now a pointer to a uint64_t where the current time is stored

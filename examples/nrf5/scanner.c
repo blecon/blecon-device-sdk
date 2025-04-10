@@ -48,7 +48,7 @@ static void example_peer_scan_report_iterator(const struct blecon_modem_peer_sca
 // Utility macro
 static inline void blecon_check_error(enum blecon_ret_t code) { 
     if(code != blecon_ok) {
-        NRF_LOG_ERROR("Blecon modem error: %x\r\n", code);
+        NRF_LOG_ERROR("Blecon modem error: 0x%x\r\n", code);
         blecon_fatal_error();
     }
 }

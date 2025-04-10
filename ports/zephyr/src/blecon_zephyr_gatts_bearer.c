@@ -20,6 +20,8 @@
 #include "zephyr/bluetooth/conn.h"
 #include "zephyr/bluetooth/gatt.h"
 
+#define BT_ATT_ERR_APPLICATION_0 0x80 // First ATT error code reserved for application
+
 static struct blecon_buffer_t blecon_zephyr_gatts_bearer_alloc(struct blecon_bearer_t* bearer, size_t sz, void* user_data);
 static size_t blecon_zephyr_gatts_bearer_mtu(struct blecon_bearer_t* bearer, void* user_data);
 static void blecon_zephyr_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blecon_buffer_t buf, void* user_data);
@@ -29,6 +31,7 @@ static ssize_t blecon_zephyr_gatts_bearer_gatt_write(struct bt_conn* conn,
     const struct bt_gatt_attr* attr, const void* buf, uint16_t len,
     uint16_t offset, uint8_t flags);
 static void blecon_zephyr_gatts_bearer_gatt_cccd_changed(const struct bt_gatt_attr* attr, uint16_t value);
+static ssize_t blecon_zephyr_gatts_bearer_gatt_cccd_write(struct bt_conn* conn, const struct bt_gatt_attr* attr, uint16_t value);
 static void blecon_zephyr_gatts_bearer_gatt_notify_done(struct bt_conn* conn, void* user_data);
 static void blecon_zephyr_gatts_bearer_close_callback(struct blecon_task_t* task, void* user_data);
 
@@ -43,7 +46,8 @@ static struct blecon_zephyr_bluetooth_t* _zephyr_bluetooth = NULL;
         BT_GATT_PERM_WRITE, \
         NULL, blecon_zephyr_gatts_bearer_gatt_write, \
         (void*)idx), \
-    BT_GATT_CCC(blecon_zephyr_gatts_bearer_gatt_cccd_changed, BT_GATT_PERM_WRITE)
+    BT_GATT_CCC_MANAGED(((struct _bt_gatt_ccc[])                    \
+    {BT_GATT_CCC_INITIALIZER(blecon_zephyr_gatts_bearer_gatt_cccd_changed, blecon_zephyr_gatts_bearer_gatt_cccd_write, NULL)}), BT_GATT_PERM_WRITE)
 
 BT_GATT_SERVICE_DEFINE(blecon_gatt_service,
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(BLECON_BLUETOOH_SERVICE_16UUID_VAL)),
@@ -114,7 +118,10 @@ void blecon_zephyr_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blec
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = zephyr_gatts_bearer->bluetooth;
 
     if(!bt_gatt_is_subscribed(zephyr_bluetooth->connection.conn, zephyr_gatts_bearer->attr, BT_GATT_CCC_NOTIFY)) {
-        blecon_fatal_error();
+        // A failure here could mean the client has disconnected, but the disconnection event hasn't propagated yet
+        // So only return here
+        blecon_buffer_free(buf);
+        return;
     }
 
     struct bt_gatt_notify_params params = {
@@ -150,8 +157,15 @@ ssize_t blecon_zephyr_gatts_bearer_gatt_write(struct bt_conn* conn,
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = _zephyr_bluetooth;
     size_t bearer_idx = (size_t) attr->user_data;
     struct blecon_zephyr_bluetooth_gatt_server_bearer_t* zephyr_gatts_bearer = &zephyr_bluetooth->gatts.bearers[bearer_idx];
-    
+
     blecon_event_loop_lock(zephyr_bluetooth->event_loop);
+
+    // Ignore if not a Blecon connection
+    if(conn != zephyr_bluetooth->connection.conn) {
+        blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+        return len; // Accept the write, but ignore it
+    }
+    
     struct blecon_buffer_t bearer_buf = blecon_buffer_alloc(len);
 
     memcpy(bearer_buf.data, buf, len);
@@ -185,6 +199,31 @@ void blecon_zephyr_gatts_bearer_gatt_cccd_changed(const struct bt_gatt_attr* att
         blecon_bearer_on_closed(&zephyr_gatts_bearer->bearer);
     }
     blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+}
+
+
+ssize_t blecon_zephyr_gatts_bearer_gatt_cccd_write(struct bt_conn* conn, const struct bt_gatt_attr* attr, uint16_t value) {
+    struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = _zephyr_bluetooth;
+
+    // The Zephyr host stack performs the following operations when handling a write to the CCCD:
+    // * Call write callback with the new value
+    // * Abort if the write is not accepted
+    // * Store the new value
+    // * Call CCCD changed callback with the new value
+    // Therefore, we only check if the write is made on the correct connection
+    // If not, we reject it
+    // The changed callback will be called with the new value, if the write is accepted
+    // We don't handle the code which is in the changed callback here, as the new value CCCD hasn't been stored yet
+    // Which means bt_gatt_is_subscribed() will return false at this stage, and blecon_zephyr_gatts_bearer_send() would assert
+
+    // Ignore if not a Blecon connection
+    if(conn != zephyr_bluetooth->connection.conn) {
+        blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+        return BT_GATT_ERR(BT_ATT_ERR_APPLICATION_0); // Reject the write
+    }
+
+    blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+    return sizeof(value);
 }
 
 
