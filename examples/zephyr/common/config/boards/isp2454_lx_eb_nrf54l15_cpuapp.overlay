@@ -1,0 +1,4 @@
+// Copyright (c) Blecon Ltd
+// SPDX-License-Identifier: Apache-2.0
+
+#include "nrf54l15_cpuapp.dtsi"

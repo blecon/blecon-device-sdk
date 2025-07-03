@@ -57,7 +57,7 @@ static void scan_from_irq(void * p_event_data, uint16_t event_size) {
     printf("Scanning.\r\n");
     
     // Scan for nearby Blecon & Bluetooth devices
-    if(!blecon_scan_start(&_blecon, true, true, 5000)) {
+    if(!blecon_scan_start(&_blecon, true, true, blecon_scan_type_passive, 5000)) {
         printf("Failed to scan for nearby devices\r\n");
         return;
     }
@@ -128,6 +128,9 @@ void example_raw_scan_report_iterator(const struct blecon_modem_raw_scan_report_
     blecon_util_append_hex_string(report->bt_addr.bytes, BLECON_BLUETOOTH_ADDR_SZ, bt_addr_str);
     printf("%s", bt_addr_str);
     printf(" Type: %" PRIu8, report->bt_addr.addr_type);
+    if(report->is_scan_response) {
+        printf(" (Scan)");
+    }
 
     printf(" SID: %" PRIu8, report->sid);
     printf(" TX Power: %" PRIi8, report->tx_power);

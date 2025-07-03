@@ -49,7 +49,7 @@ struct blecon_bluetooth_fn_t {
     struct blecon_bearer_t* (*connection_get_gatt_server_bearer)(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_gatt_server_t* gatts);
     void (*connection_free)(struct blecon_bluetooth_connection_t* connection);
 
-    void (*scan_start)(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask);
+    void (*scan_start)(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan);
     void (*scan_stop)(struct blecon_bluetooth_t* bluetooth);
 };
 
@@ -90,6 +90,7 @@ struct blecon_bluetooth_advertising_info_t {
     struct blecon_bluetooth_addr_t bt_addr;
     bool legacy_pdu : 1;
     bool is_connectable : 1;
+    bool is_scan_response : 1;
     uint8_t sid;
     int8_t tx_power;
     int8_t rssi;
@@ -216,8 +217,8 @@ static inline struct blecon_bearer_t* blecon_bluetooth_connection_get_gatt_serve
     return connection->bluetooth->fns->connection_get_gatt_server_bearer(connection, gatt_server);
 }
 
-static inline void blecon_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask) {
-    bluetooth->fns->scan_start(bluetooth, phy_mask);
+static inline void blecon_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan) {
+    bluetooth->fns->scan_start(bluetooth, phy_mask, active_scan);
 }
 
 static inline void blecon_bluetooth_scan_stop(struct blecon_bluetooth_t* bluetooth) {

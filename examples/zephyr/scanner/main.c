@@ -184,6 +184,9 @@ void example_raw_scan_report_iterator(const struct blecon_modem_raw_scan_report_
     blecon_util_append_hex_string(report->bt_addr.bytes, BLECON_BLUETOOTH_ADDR_SZ, bt_addr_str);
     printk("%s", bt_addr_str);
     printk(" Type: %" PRIu8, report->bt_addr.addr_type);
+    if(report->is_scan_response) {
+        printk(" (Scan)");
+    }
 
     printk(" SID: %" PRIu8, report->sid);
     printk(" TX Power: %" PRIi8, report->tx_power);
@@ -316,7 +319,7 @@ void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data) {
 
 void cmd_blecon_scan_event(struct blecon_event_t* event, void* user_data) {
     // Scan for nearby Blecon & Bluetooth devices
-    if(!blecon_scan_start(&_blecon, true, true, 5000)) {
+    if(!blecon_scan_start(&_blecon, true, true, blecon_scan_type_passive, 5000)) {
         printk("Failed to scan for nearby devices\r\n");
         return;
     }

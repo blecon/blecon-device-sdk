@@ -147,7 +147,7 @@
 			10 d8 00 00  ff ff ff ff  ff ff ff ff  ff ff ff ff
 			ff ff ff ff  ff ff ff ff  ff ff ff ff  ff ff ff ff
 		];
-		size = <524288>;
+		size = <4194304>;
 		has-dpd;
 		t-enter-dpd = <10000>;
 		t-exit-dpd = <35000>;

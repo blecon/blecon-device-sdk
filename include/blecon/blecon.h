@@ -36,6 +36,15 @@ struct blecon_ext_modem_transport_t;
 
 struct blecon_t;
 struct blecon_modem_t;
+
+/**
+ * @brief Scan type enumeration for blecon_scan_start()
+ */
+enum blecon_scan_type_t {
+    blecon_scan_type_passive,   /**< Passive scanning - listen only */
+    blecon_scan_type_active     /**< Active scanning - send scan requests */
+};
+
 /**
  * @brief Callbacks structure to populate by user
  * 
@@ -273,13 +282,28 @@ bool blecon_ping_get_latency(struct blecon_t* blecon, bool* latency_available, u
 /**
  * @brief Start a peer scanning session
  * 
+ * This function starts a scanning session to discover nearby Blecon and Bluetooth devices.
+ * The scan can be configured to report other Blecon devices (peers),
+ * raw advertising data from all devices, or both.
+ * 
+ * When peer_scan is enabled, the function will report devices that are identified
+ * as Blecon peers through the on_scan_report callback.
+ * 
+ * When raw_scan is enabled, the function will report raw advertising data from
+ * other Bluetooth devices. The scan_type parameter controls whether to send
+ * scan requests to advertisers (active scanning) or just listen passively.
+ * 
+ * The scan will run for the specified duration and results will be available
+ * through the blecon_scan_get_data() function after completion.
+ * 
  * @param blecon the blecon instance
  * @param peer_scan true to report peer devices
  * @param raw_scan true to report raw advertising data
+ * @param scan_type the type of scan to perform (only valid when performing a raw scan)
  * @param duration_ms the duration of the scan in milliseconds
  * @return true on success, or false on failure
  */
-bool blecon_scan_start(struct blecon_t* blecon, bool peer_scan, bool raw_scan, uint32_t duration_ms);
+bool blecon_scan_start(struct blecon_t* blecon, bool peer_scan, bool raw_scan, enum blecon_scan_type_t scan_type, uint32_t duration_ms);
 
 /**
  * @brief Stop the current peer scanning session
@@ -320,6 +344,14 @@ void blecon_submit_request(struct blecon_t* blecon, struct blecon_request_t* req
  * @return a pointer to a struct blecon_request_processor_t instance
  */
 struct blecon_request_processor_t* blecon_get_request_processor(struct blecon_t* blecon);
+
+/**
+ * @brief Get the user data associated with the blecon instance
+ *
+ * @param blecon the blecon instance
+ * @return a pointer to the user data
+ */
+void* blecon_get_user_data(struct blecon_t* blecon);
 
 struct blecon_t {
     struct blecon_modem_t* modem;

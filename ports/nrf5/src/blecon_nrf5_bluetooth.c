@@ -75,7 +75,7 @@ static void blecon_nrf5_bluetooth_connection_get_info(struct blecon_bluetooth_co
 static void blecon_nrf5_bluetooth_connection_get_power_info(struct blecon_bluetooth_connection_t* connection, int8_t* tx_power, int8_t* rssi);
 static void blecon_nrf5_bluetooth_connection_disconnect(struct blecon_bluetooth_connection_t* connection);
 static void blecon_nrf5_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection);
-static void blecon_nrf5_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask);
+static void blecon_nrf5_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan);
 static void blecon_nrf5_bluetooth_scan_stop(struct blecon_bluetooth_t* bluetooth);
 
 struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
@@ -268,13 +268,13 @@ void blecon_nrf5_bluetooth_connection_free(struct blecon_bluetooth_connection_t*
 
 }
 
-void blecon_nrf5_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask) {
+void blecon_nrf5_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan) {
 #ifdef S140
     struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*)bluetooth;
     // Populate scan parameters
     nrf5_bluetooth->scan_params.extended = 1;
     nrf5_bluetooth->scan_params.report_incomplete_evts = 0;
-    nrf5_bluetooth->scan_params.active = 0;
+    nrf5_bluetooth->scan_params.active = active_scan ? 1 : 0;
     nrf5_bluetooth->scan_params.filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL;
     nrf5_bluetooth->scan_params.scan_phys = 0;
     if(phy_mask.phy_1m) {
@@ -621,6 +621,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                         .bt_addr.addr_type = p_adv_report->peer_addr.addr_type,
                         .legacy_pdu = !p_adv_report->type.extended_pdu,
                         .is_connectable = p_adv_report->type.connectable,
+                        .is_scan_response = p_adv_report->type.scan_response,
                         .sid = p_adv_report->type.extended_pdu ? p_adv_report->set_id : 0,
                         .tx_power = p_adv_report->tx_power,
                         .rssi = p_adv_report->rssi,

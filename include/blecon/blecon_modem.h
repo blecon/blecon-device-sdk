@@ -36,6 +36,7 @@ enum blecon_ret_t {
     blecon_error_queue_full, ///< Queue is full
     blecon_error_queue_empty, ///< Queue is empty
     blecon_error_buffer_alloc_failed, ///< Buffer allocation failed
+    blecon_error_invalid_parameters, ///< Invalid parameter
 };
 
 enum blecon_modem_info_type_t {
@@ -53,11 +54,18 @@ struct blecon_modem_info_t {
     uint32_t firmware_version; ///< The modem's firmware version
 };
 
+struct blecon_modem_scan_flags_t {
+    bool peer_scan : 1; ///< Enable peer scan
+    bool raw_scan : 1; ///< Enable raw scan
+    bool active_scan : 1; ///< Enable active scan
+};
+
 struct blecon_modem_raw_scan_report_t {
     struct blecon_bluetooth_addr_t bt_addr;
     int8_t tx_power;
     int8_t rssi;
-    uint8_t sid;
+    uint8_t sid : 4;
+    bool is_scan_response : 1; ///< True if this is a scan response
     const uint8_t* adv_data;
     size_t adv_data_sz;
 };
@@ -109,7 +117,7 @@ struct blecon_modem_fn_t {
     enum blecon_ret_t (*ping_cancel)(struct blecon_modem_t* modem);
     enum blecon_ret_t (*ping_get_latency)(struct blecon_modem_t* modem, bool* latency_available, uint32_t* connection_latency_ms, uint32_t* round_trip_latency_ms);
 
-    enum blecon_ret_t (*scan_start)(struct blecon_modem_t* modem, bool peer_scan, bool raw_scan, uint32_t duration_ms);
+    enum blecon_ret_t (*scan_start)(struct blecon_modem_t* modem, struct blecon_modem_scan_flags_t flags, uint32_t duration_ms);
     enum blecon_ret_t (*scan_stop)(struct blecon_modem_t* modem);
     enum blecon_ret_t (*scan_get_data)(struct blecon_modem_t* modem, bool* overflow);
 };
@@ -150,7 +158,7 @@ enum blecon_ret_t blecon_modem_ping_perform(struct blecon_modem_t* modem, uint32
 enum blecon_ret_t blecon_modem_ping_cancel(struct blecon_modem_t* modem);
 enum blecon_ret_t blecon_modem_ping_get_latency(struct blecon_modem_t* modem, bool* latency_available, uint32_t* connection_latency_ms, uint32_t* round_trip_latency_ms);
 
-enum blecon_ret_t blecon_modem_scan_start(struct blecon_modem_t* modem, bool peer_scan, bool raw_scan, uint32_t duration_ms);
+enum blecon_ret_t blecon_modem_scan_start(struct blecon_modem_t* modem, struct blecon_modem_scan_flags_t flags, uint32_t duration_ms);
 enum blecon_ret_t blecon_modem_scan_get_data(struct blecon_modem_t* modem, bool* overflow);
 enum blecon_ret_t blecon_modem_scan_stop(struct blecon_modem_t* modem);
 
