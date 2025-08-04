@@ -11,7 +11,6 @@
 #include "string.h"
 #include "stdlib.h"
 
-#include "ota.h"
 
 #include "blecon/blecon.h"
 #include "blecon/blecon_error.h"
@@ -21,6 +20,7 @@
 #include "blecon_zephyr/blecon_zephyr.h"
 #include "blecon_zephyr/blecon_zephyr_event_loop.h"
 #include "blecon_zephyr/blecon_zephyr_memfault.h"
+#include "blecon_zephyr/blecon_zephyr_memfault_ota.h"
 
 #include "memfault/components.h"
 
@@ -29,12 +29,19 @@
 static struct blecon_event_loop_t* _event_loop = NULL;
 static struct blecon_t _blecon = {0};
 static struct blecon_memfault_client_t _memfault_client = {0};
+static struct blecon_zephyr_memfault_ota_t ota = {0};
 
 // Blecon callbacks
 static void example_on_connection(struct blecon_t* blecon);
 static void example_on_disconnection(struct blecon_t* blecon);
 static void example_on_time_update(struct blecon_t* blecon);
 static void example_on_ping_result(struct blecon_t* blecon);
+
+// OTA callbacks
+static void ota_started(struct blecon_zephyr_memfault_ota_t* ota, const char *ota_url);
+static void ota_complete(struct blecon_zephyr_memfault_ota_t* ota, size_t bytes_downloaded);
+static void ota_error(struct blecon_zephyr_memfault_ota_t* ota, enum blecon_zephyr_memfault_ota_status_t status);
+static void ota_progress(struct blecon_zephyr_memfault_ota_t* ota, size_t bytes_downloaded);
 
 const static struct blecon_callbacks_t blecon_callbacks = {
     .on_connection = example_on_connection,
@@ -69,6 +76,24 @@ void example_on_time_update(struct blecon_t* blecon) {
 }
 
 void example_on_ping_result(struct blecon_t* blecon) {}
+
+
+void ota_started(struct blecon_zephyr_memfault_ota_t* ota, const char *ota_url) {
+    printf("OTA started with URL: %s\r\n", ota_url);
+}
+
+void ota_complete(struct blecon_zephyr_memfault_ota_t* ota, size_t bytes_downloaded) {
+    printf("OTA complete: %zu bytes\r\n", bytes_downloaded);
+
+    // Install the OTA update
+    blecon_zephyr_memfault_ota_install_and_reboot(ota);
+}
+void ota_error(struct blecon_zephyr_memfault_ota_t* ota, enum blecon_zephyr_memfault_ota_status_t status) {
+    printf("OTA error: %s\r\n", blecon_zephyr_memfault_ota_status_to_string(status));
+}
+void ota_progress(struct blecon_zephyr_memfault_ota_t* ota, size_t bytes_downloaded) {
+    printf("OTA progress: %zu bytes\r\n", bytes_downloaded);
+}
 
 int main(void)
 {
@@ -120,7 +145,17 @@ int main(void)
     printk("Device URL: %s\r\n", blecon_url);
 
     // Init OTA module
-    ota_init(_event_loop, &_blecon, MEMFAULT_REQUEST_NAMESPACE);
+    const static struct blecon_zephyr_memfault_ota_callbacks_t ota_callbacks = {
+        .on_ota_start = ota_started,
+        .on_ota_complete = ota_complete,
+        .on_ota_error = ota_error,
+        .on_ota_progress = ota_progress,
+    };
+    blecon_zephyr_memfault_ota_init(&ota, _event_loop, &_blecon, MEMFAULT_REQUEST_NAMESPACE, &ota_callbacks, NULL);
+
+    // Confirm the current firmware image so that it will be used after reboot.
+    // (Optionally perform tests to ensure the current image is stable before confirming it.)
+    blecon_zephyr_memfault_ota_confirm_current_image(&ota);
 
     // Initiate connection
     if(!blecon_connection_initiate(&_blecon)) {
@@ -168,7 +203,7 @@ void cmd_blecon_memfault_sync_event(struct blecon_event_t* event, void* user_dat
     }
 
     // Check for update
-    ota_check_for_update();
+    blecon_zephyr_memfault_ota_check_for_update(&ota);
 }
 
 void cmd_blecon_announce_event(struct blecon_event_t* event, void* user_data) {

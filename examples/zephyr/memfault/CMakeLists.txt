@@ -13,6 +13,6 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 set(CMAKE_C_STANDARD 11)
 
 project(blecon-memfault)
-target_sources(app PRIVATE main.c ota.c)
+target_sources(app PRIVATE main.c)
 
 zephyr_include_directories(config)

@@ -1,0 +1,10 @@
+board:
+  name: bl54l15u_dvk
+  vendor: nordic
+  socs:
+  - name: nrf54l15
+    variants:
+    - name: xip
+      cpucluster: cpuflpr
+    - name: ns
+      cpucluster: cpuapp

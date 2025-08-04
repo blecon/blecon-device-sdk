@@ -59,6 +59,7 @@ endif()
 if(CONFIG_BLECON_MEMFAULT)
 target_sources(blecon_zephyr PRIVATE
   src/blecon_zephyr_memfault.c
+  src/blecon_zephyr_memfault_ota.c
 )
 endif()
 
