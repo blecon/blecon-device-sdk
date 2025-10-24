@@ -11,9 +11,9 @@
 
 // Blecon device URLs have the following format:
 // https://blecon.dev/[UUID]
-#define BLECON_URL_PREFIX "https://blecon.dev/"
+#define BLECON_URL_PREFIX "https://blecon.dev/urn:uuid:"
 
-#define BLECON_URL_SZ (19 /* https://blecon.dev/ */ \
+#define BLECON_URL_SZ ((sizeof(BLECON_URL_PREFIX) - 1) \
     + (BLECON_UUID_STR_SZ - 1) /* UUID excluding null terminator */ \
     + 1 /* Null terminator */)
 
@@ -45,7 +45,7 @@
 #define BLECON_CHACHA20_POLY1305_NONCE_SZ   12
 
 // GAP
-#define BLECON_BLUETOOH_SERVICE_16UUID_VAL 0xFD0D
+#define BLECON_BLUETOOTH_SERVICE_16UUID_VAL 0xFD0D
 
 // Base UUID for GATT characteristics
 #define BLECON_BASE_GATT_SERVICE_UUID 0xec, 0x4f, 0x00, 0x00, 0x15, 0x37, 0x44, 0x3e, 0xb0, 0x5a, 0x71, 0x30, 0x51, 0x21, 0x2f, 0x1c

@@ -48,7 +48,7 @@ void blecon_nrf5_bluetooth_gatt_server_setup(struct blecon_nrf5_bluetooth_t* nrf
 
     // Add Blecon service
     ble_uuid_t blecon_service_uuid = {0};
-    BLE_UUID_BLE_ASSIGN(blecon_service_uuid, BLECON_BLUETOOH_SERVICE_16UUID_VAL);
+    BLE_UUID_BLE_ASSIGN(blecon_service_uuid, BLECON_BLUETOOTH_SERVICE_16UUID_VAL);
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY, &blecon_service_uuid, &nrf5_bluetooth->gatts.service_handle);
     blecon_assert(err_code == NRF_SUCCESS);
 }

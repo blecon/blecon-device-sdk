@@ -1,0 +1,5 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_KKM_S5_BCN
+    select SOC_NRF52833_QIAA

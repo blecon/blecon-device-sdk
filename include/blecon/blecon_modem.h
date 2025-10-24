@@ -17,6 +17,7 @@ extern "C" {
 #include "blecon/blecon_defs.h"
 #include "blecon/blecon_bluetooth_types.h"
 #include "blecon/blecon_task_queue.h"
+#include "blecon/blecon_advertising_mode.h"
 
 struct blecon_modem_t;
 
@@ -97,6 +98,7 @@ struct blecon_modem_fn_t {
     enum blecon_ret_t (*setup)(struct blecon_modem_t* modem);
     enum blecon_ret_t (*get_info)(struct blecon_modem_t* modem, struct blecon_modem_info_t* info);
     enum blecon_ret_t (*set_application_data)(struct blecon_modem_t* modem, const uint8_t* application_model_id, uint32_t application_schema_version);
+    enum blecon_ret_t (*set_advertising_mode)(struct blecon_modem_t* modem, enum blecon_advertising_mode_t mode);
     enum blecon_ret_t (*announce)(struct blecon_modem_t* modem);
 
     enum blecon_ret_t (*connection_initiate)(struct blecon_modem_t* modem);
@@ -138,6 +140,7 @@ struct blecon_event_loop_t* blecon_modem_get_event_loop(struct blecon_modem_t* m
 enum blecon_ret_t blecon_modem_setup(struct blecon_modem_t* modem);
 enum blecon_ret_t blecon_modem_get_info(struct blecon_modem_t* modem, struct blecon_modem_info_t* info);
 enum blecon_ret_t blecon_modem_set_application_data(struct blecon_modem_t* modem, const uint8_t* application_model_id, uint32_t application_schema_version);
+enum blecon_ret_t blecon_modem_set_advertising_mode(struct blecon_modem_t* modem, enum blecon_advertising_mode_t mode);
 enum blecon_ret_t blecon_modem_announce(struct blecon_modem_t* modem);
 
 enum blecon_ret_t blecon_modem_connection_initiate(struct blecon_modem_t* modem);

@@ -50,7 +50,7 @@ static struct blecon_zephyr_bluetooth_t* _zephyr_bluetooth = NULL;
     {BT_GATT_CCC_INITIALIZER(blecon_zephyr_gatts_bearer_gatt_cccd_changed, blecon_zephyr_gatts_bearer_gatt_cccd_write, NULL)}), BT_GATT_PERM_WRITE)
 
 BT_GATT_SERVICE_DEFINE(blecon_gatt_service,
-	BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(BLECON_BLUETOOH_SERVICE_16UUID_VAL)),
+	BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(BLECON_BLUETOOTH_SERVICE_16UUID_VAL)),
 	BLECON_GATT_BEARER_CHARACTERISTIC(0),
     BLECON_GATT_BEARER_CHARACTERISTIC(1),
 );

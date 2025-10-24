@@ -76,32 +76,6 @@ struct blecon_bluetooth_gatt_server_t {
     struct blecon_bluetooth_t* bluetooth;
 };
 
-struct blecon_bluetooth_advertising_params_t {
-    struct blecon_bluetooth_addr_t bt_addr;
-    bool legacy_pdu : 1;
-    bool is_connectable : 1;
-    uint8_t sid;
-    int8_t tx_power;
-    enum blecon_bluetooth_phy_t phy;
-    uint32_t interval_0_625ms;
-};
-
-struct blecon_bluetooth_advertising_info_t {
-    struct blecon_bluetooth_addr_t bt_addr;
-    bool legacy_pdu : 1;
-    bool is_connectable : 1;
-    bool is_scan_response : 1;
-    uint8_t sid;
-    int8_t tx_power;
-    int8_t rssi;
-    enum blecon_bluetooth_phy_t phy;
-};
-
-struct blecon_bluetooth_advertising_data_t {
-    const uint8_t* data;
-    size_t data_sz;
-};
-
 struct blecon_bluetooth_advertising_set_t {
     struct blecon_bluetooth_t* bluetooth;
     void* user_data;

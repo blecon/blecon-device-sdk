@@ -1,0 +1,7 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+board:
+  name: kkm_s5_bcn
+  vendor: kkm
+  socs:
+  - name: nrf52833

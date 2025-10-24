@@ -149,6 +149,10 @@ config BLECON_MEMFAULT_SOFTWARE_VERSION
     string "Software Version"
     default MCUBOOT_IMGTOOL_SIGN_VERSION
 
+config BLECON_MEMFAULT_SOFTWARE_VERSION_SUFFIX
+    string "Software Version Suffix"
+    default ""
+
 config BLECON_MEMFAULT_SOFTWARE_TYPE
     string "Software Type"
 

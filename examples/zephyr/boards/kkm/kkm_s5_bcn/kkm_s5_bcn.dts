@@ -1,0 +1,201 @@
+/*
+ * Copyright (c) Blecon Ltd
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <nordic/nrf52833_qdaa.dtsi>
+#include "kkm_s5_bcn-pinctrl.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	model = "KKM S5 BCN";
+	compatible = "kkm,kkm-s5-bcn";
+
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,uart-mcumgr = &uart0;
+		zephyr,bt-mon-uart = &uart0;
+		zephyr,bt-c2h-uart = &uart0;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,ieee802154 = &ieee802154;
+		nordic,pm-ext-flash = &fm25q04;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+			label = "Red LED";
+		};
+	};
+
+	pwmleds {
+		compatible = "pwm-leds";
+		pwm_led0: pwm_led_0 {
+			pwms = <&pwm0 0 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			gpios = <&gpio0 15 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Push button switch";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+		led0 = &led0;
+		pwm-led0 = &pwm_led0;
+		sw0 = &button0;
+		watchdog0 = &wdt0;
+	};
+};
+
+&adc {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1_6";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,input-positive = <NRF_SAADC_VDD>;
+		zephyr,resolution = <12>;
+		zephyr,oversampling = <8>;
+	};
+};
+
+&uicr {
+	gpio-as-nreset;
+	nfct-pins-as-gpios;
+};
+
+&gpiote {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+	gpio-reserved-ranges = <0 2>, <6 1>, <8 1>, <17 7>;
+	gpio-line-names = "XL1", "XL2", "SHT SDA", "LED", "SDA", "SCL", "",
+		"", "", "SPI RXD", "SPI CS0", "INT2", "", "",
+		"", "KEY", "", "SPI CLK", "RESET", "",
+		"SPI TXD", "", "", "","",
+		"", "", "", "", "VBAT", "", "";
+};
+
+&gpio1 {
+	status = "okay";
+	gpio-line-names = "", "", "", "", "", "", "", "",
+		"", "", "", "INT1", "", "", "", "";
+};
+
+&uart0 {
+	compatible = "nordic,nrf-uarte";
+	status = "disabled";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-1 = <&uart0_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&i2c0 {
+	compatible = "nordic,nrf-twi";
+	status = "okay";
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-1 = <&i2c0_sleep>;
+	pinctrl-names = "default", "sleep";
+	clock-frequency = <I2C_BITRATE_FAST>;
+
+	sht4x: sht4x@44 {
+		compatible = "sensirion,sht4x";
+		repeatability = <1>;
+		reg = <0x44>;
+		status = "okay";
+	};
+};
+
+&i2c1 {
+	compatible = "nordic,nrf-twi";
+	status = "okay";
+	pinctrl-0 = <&i2c1_default>;
+	pinctrl-1 = <&i2c1_sleep>;
+	pinctrl-names = "default", "sleep";
+	clock-frequency = <I2C_BITRATE_FAST>;
+
+	lis3dh: lis3dh@19 {
+		compatible = "st,lis3dh", "st,lis2dh";
+		reg = <0x19>;
+		irq-gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>, <&gpio0 11 GPIO_ACTIVE_HIGH>;
+		int1-gpio-config = <1>;
+		int2-gpio-config = <1>;
+		status = "okay";
+	};
+};
+
+&pwm0 {
+	status = "okay";
+	pinctrl-0 = <&pwm0_default>;
+	pinctrl-1 = <&pwm0_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0xC000>;
+		};
+		slot0_partition: partition@c000 {
+			label = "image-0";
+			reg = <0x0000C000 0x37000>;
+		};
+		slot1_partition: partition@43000 {
+			label = "image-1";
+			reg = <0x00043000 0x37000>;
+		};
+		storage_partition: partition@7a000 {
+			label = "storage";
+			reg = <0x0007A000 0x00006000>;
+		};
+	};
+};
+
+&spi2 {
+        status = "okay";
+
+        pinctrl-0 = <&spi2_default>;
+        pinctrl-1 = <&spi2_sleep>;
+        pinctrl-names = "default", "sleep";
+		cs-gpios = <&gpio0 10 GPIO_ACTIVE_LOW>;
+
+        fm25q04: fm25q04b@0 {
+                compatible = "jedec,spi-nor";
+                reg = <0>;
+                spi-max-frequency = <100000000>;
+                jedec-id = [a1 40 13];
+                sfdp-bfp = [
+                        e5 20 f1 ff  ff ff 3f 00  44 eb 08 6b  08 3b 80 bb
+                        fe ff ff ff  ff ff 00 00  ff ff 08 eb  0c 20 0f 52
+                        10 d8 00 00
+                ];
+                size = <4194304>;
+                has-dpd;
+                t-enter-dpd = <3000>;
+                t-exit-dpd = <3000>;
+				status = "okay";
+        };
+};

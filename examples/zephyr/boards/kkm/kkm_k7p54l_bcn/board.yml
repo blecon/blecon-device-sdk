@@ -1,0 +1,17 @@
+board:
+  name: kkm_k7p54l_bcn
+  vendor: kkm
+  revision:
+    format: major.minor.patch
+    default: 1.1.0
+    exact: false
+    revisions:
+    - name: 1.0.0
+    - name: 1.1.0
+  socs:
+  - name: nrf54l15
+    variants:
+    - name: xip
+      cpucluster: cpuflpr
+    - name: ns
+      cpucluster: cpuapp

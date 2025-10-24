@@ -25,7 +25,9 @@ extern "C" {
 #include "blecon_request.h"
 #include "blecon_request_processor.h"
 #include "blecon_task_queue.h"
+#include "blecon_advertising_mode.h"
 
+// Forward declarations
 struct blecon_event_loop_t;
 struct blecon_timer_t;
 struct blecon_bluetooth_t;
@@ -188,6 +190,18 @@ void blecon_get_info(struct blecon_t* blecon, struct blecon_modem_info_t* info);
  * @return true on success, or false on failure
  */
 bool blecon_set_application_data(struct blecon_t* blecon, const uint8_t* application_model_id, uint32_t application_schema_version);
+
+/**
+ * @brief Set advertising mode
+ * 
+ * This function configures the advertising mode, which affects the power consumption
+ * and connection latency when advertising or attempting to connect.
+ * 
+ * @param blecon the blecon instance
+ * @param mode the advertising mode (high_performance, balanced, or ultra_low_power)
+ * @return true on success, or false on failure
+ */
+bool blecon_set_advertising_mode(struct blecon_t* blecon, enum blecon_advertising_mode_t mode);
 
 /**
  * @brief Announce the device ID to surrounding hotspots
