@@ -1,0 +1,8 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+# KKM S5 BCN board configuration
+
+if BOARD_KKM_S5_BCN
+
+endif # BOARD_KKM_S5_BCN

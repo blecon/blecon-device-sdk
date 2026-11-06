@@ -28,16 +28,8 @@ struct blecon_crypto_fn_t {
     bool (*x25519_dh)(struct blecon_crypto_t* crypto, const uint8_t* private_key, const uint8_t* peer_public_key, uint8_t* shared_secret);
     bool (*hkdf_sha256)(struct blecon_crypto_t* crypto, const uint8_t* secret, size_t secret_sz, const uint8_t* salt, size_t salt_sz, uint8_t* output, size_t output_sz);
     struct blecon_crypto_aead_cipher_t* (*aead_cipher_new)(struct blecon_crypto_t* crypto, const uint8_t* key, bool encrypt_ndecrypt);
-    void (*aead_cipher_enc_auth)(struct blecon_crypto_aead_cipher_t* cipher, 
-                const uint8_t* nonce, size_t nonce_sz, 
-                const uint8_t* plaintext, size_t plaintext_sz, 
-                const uint8_t* additional_data, size_t additional_data_sz,
-                uint8_t* ciphertext_mac);
-    bool (*aead_cipher_dec_auth)(struct blecon_crypto_aead_cipher_t* cipher, 
-                const uint8_t* nonce, size_t nonce_sz, 
-                const uint8_t* ciphertext_mac, size_t ciphertext_mac_sz,
-                const uint8_t* additional_data, size_t additional_data_sz,
-                uint8_t* plaintext);
+    void (*aead_cipher_enc_auth)(struct blecon_crypto_aead_cipher_t* cipher, const uint8_t* nonce, size_t nonce_sz, const uint8_t* plaintext, size_t plaintext_sz, const uint8_t* additional_data, size_t additional_data_sz, uint8_t* ciphertext_mac);
+    bool (*aead_cipher_dec_auth)(struct blecon_crypto_aead_cipher_t* cipher, const uint8_t* nonce, size_t nonce_sz, const uint8_t* ciphertext_mac, size_t ciphertext_mac_sz, const uint8_t* additional_data, size_t additional_data_sz, uint8_t* plaintext);
     void (*aead_cipher_free)(struct blecon_crypto_aead_cipher_t* cipher);
     void (*sha256_compute)(struct blecon_crypto_t* crypto, const uint8_t* in, size_t in_sz, uint8_t* hash);
     bool (*sha256_verify)(struct blecon_crypto_t* crypto, const uint8_t* in, size_t in_sz, const uint8_t* hash);
@@ -87,25 +79,13 @@ static inline struct blecon_crypto_aead_cipher_t* blecon_crypto_aead_cipher_new(
     return crypto->fns->aead_cipher_new(crypto, key, encrypt_ndecrypt);
 }
 
-static inline void blecon_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, 
-            const uint8_t* nonce, size_t nonce_sz, 
-            const uint8_t* plaintext, size_t plaintext_sz, 
-            const uint8_t* additional_data, size_t additional_data_sz,
-            uint8_t* ciphertext_mac) {
-                return cipher->crypto->fns->aead_cipher_enc_auth(cipher, nonce, nonce_sz, plaintext, plaintext_sz, 
-                    additional_data, additional_data_sz,
-                    ciphertext_mac);
-            }
+static inline void blecon_crypto_aead_cipher_enc_auth(struct blecon_crypto_aead_cipher_t* cipher, const uint8_t* nonce, size_t nonce_sz, const uint8_t* plaintext, size_t plaintext_sz, const uint8_t* additional_data, size_t additional_data_sz, uint8_t* ciphertext_mac) {
+    return cipher->crypto->fns->aead_cipher_enc_auth(cipher, nonce, nonce_sz, plaintext, plaintext_sz, additional_data, additional_data_sz, ciphertext_mac);
+}
 
-static inline bool blecon_crypto_aead_cipher_dec_auth(struct blecon_crypto_aead_cipher_t* cipher, 
-            const uint8_t* nonce, size_t nonce_sz, 
-            const uint8_t* ciphertext_mac, size_t ciphertext_mac_sz,
-            const uint8_t* additional_data, size_t additional_data_sz,
-            uint8_t* plaintext) {
-                return cipher->crypto->fns->aead_cipher_dec_auth(cipher, nonce, nonce_sz, ciphertext_mac, ciphertext_mac_sz, 
-                    additional_data, additional_data_sz,
-                    plaintext);
-            }
+static inline bool blecon_crypto_aead_cipher_dec_auth(struct blecon_crypto_aead_cipher_t* cipher, const uint8_t* nonce, size_t nonce_sz, const uint8_t* ciphertext_mac, size_t ciphertext_mac_sz, const uint8_t* additional_data, size_t additional_data_sz, uint8_t* plaintext) {
+    return cipher->crypto->fns->aead_cipher_dec_auth(cipher, nonce, nonce_sz, ciphertext_mac, ciphertext_mac_sz, additional_data, additional_data_sz, plaintext);
+}
 
 static inline void blecon_crypto_aead_cipher_free(struct blecon_crypto_aead_cipher_t* cipher) {
     cipher->crypto->fns->aead_cipher_free(cipher);

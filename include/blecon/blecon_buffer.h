@@ -30,7 +30,7 @@ static inline bool blecon_buffer_is_valid(struct blecon_buffer_t buffer) {
 }
 
 static inline struct blecon_buffer_t blecon_buffer_get_null(void) {
-    struct blecon_buffer_t buffer = {.data = NULL, .sz = 0, .underlying_mem = NULL, .underlying_sz = 0};
+    struct blecon_buffer_t buffer = { .data = NULL, .sz = 0, .underlying_mem = NULL, .underlying_sz = 0 };
     return buffer;
 }
 
@@ -41,7 +41,6 @@ struct blecon_buffer_t blecon_buffer_reset(struct blecon_buffer_t buffer);
 
 size_t blecon_buffer_total_allocations_size(void);
 size_t blecon_buffer_total_allocations_count(void);
-
 
 #ifdef __cplusplus
 }

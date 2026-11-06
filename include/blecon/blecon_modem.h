@@ -20,24 +20,25 @@ extern "C" {
 #include "blecon/blecon_advertising_mode.h"
 
 struct blecon_modem_t;
+struct blecon_tracing_channel_t;
 
 /**
  * @brief Return codes
- * 
+ *
  */
 enum blecon_ret_t {
-    blecon_ok, ///< OK
-    blecon_error_exceeds_mtu, ///< Frame exceeds MTU
-    blecon_error_invalid_state, ///< This method cannot be called in the current state
-    blecon_error_buffer_too_small, ///< Data doesn't fit in the buffer
-    blecon_error_serialization, ///< Serialization error (external modem)
-    blecon_error_transport_error, ///< Transport error (external modem)
-    blecon_error_no_resource, ///< No resource available
-    blecon_error_invalid_frame, ///< Invalid frame
-    blecon_error_queue_full, ///< Queue is full
-    blecon_error_queue_empty, ///< Queue is empty
+    blecon_ok,                        ///< OK
+    blecon_error_exceeds_mtu,         ///< Frame exceeds MTU
+    blecon_error_invalid_state,       ///< This method cannot be called in the current state
+    blecon_error_buffer_too_small,    ///< Data doesn't fit in the buffer
+    blecon_error_serialization,       ///< Serialization error (external modem)
+    blecon_error_transport_error,     ///< Transport error (external modem)
+    blecon_error_no_resource,         ///< No resource available
+    blecon_error_invalid_frame,       ///< Invalid frame
+    blecon_error_queue_full,          ///< Queue is full
+    blecon_error_queue_empty,         ///< Queue is empty
     blecon_error_buffer_alloc_failed, ///< Buffer allocation failed
-    blecon_error_invalid_parameters, ///< Invalid parameter
+    blecon_error_invalid_parameters,  ///< Invalid parameter
 };
 
 enum blecon_modem_info_type_t {
@@ -48,23 +49,23 @@ enum blecon_modem_info_type_t {
 /**
  * @struct Modem information
  * @brief Information about underlying modem
- * 
+ *
  */
 struct blecon_modem_info_t {
     enum blecon_modem_info_type_t type; ///< The modem type (internal or external)
-    uint32_t firmware_version; ///< The modem's firmware version
+    uint32_t firmware_version;          ///< The modem's firmware version
 };
 
 struct blecon_modem_scan_flags_t {
-    bool peer_scan : 1; ///< Enable peer scan
-    bool raw_scan : 1; ///< Enable raw scan
+    bool peer_scan : 1;   ///< Enable peer scan
+    bool raw_scan : 1;    ///< Enable raw scan
     bool active_scan : 1; ///< Enable active scan
 };
 
 struct blecon_modem_raw_scan_report_t {
     struct blecon_bluetooth_addr_t bt_addr;
     int8_t tx_power;
-    int8_t rssi;
+    int8_t rssi; ///< RSSI in dBm, or BLECON_BLUETOOTH_RSSI_UNKNOWN when the modem had no reading
     uint8_t sid : 4;
     bool is_scan_response : 1; ///< True if this is a scan response
     const uint8_t* adv_data;
@@ -75,7 +76,7 @@ struct blecon_modem_peer_scan_report_t {
     uint8_t blecon_id[BLECON_UUID_SZ];
     bool is_announcing : 1;
     int8_t tx_power;
-    int8_t rssi;
+    int8_t rssi; ///< RSSI in dBm, or BLECON_BLUETOOTH_RSSI_UNKNOWN when the modem had no reading
 };
 
 // Callbacks
@@ -103,16 +104,16 @@ struct blecon_modem_fn_t {
 
     enum blecon_ret_t (*connection_initiate)(struct blecon_modem_t* modem);
     enum blecon_ret_t (*connection_terminate)(struct blecon_modem_t* modem);
-    
+
     enum blecon_ret_t (*outgoing_request_frame_queue_push)(struct blecon_modem_t* modem, const struct blecon_request_frame_t* frame);
     enum blecon_ret_t (*outgoing_request_frame_queue_space)(struct blecon_modem_t* modem, size_t* space);
 
     enum blecon_ret_t (*incoming_request_frame_queue_pop)(struct blecon_modem_t* modem, struct blecon_request_frame_t* frame);
     enum blecon_ret_t (*incoming_request_frame_queue_count)(struct blecon_modem_t* modem, size_t* count);
     enum blecon_ret_t (*incoming_request_frame_queue_clear)(struct blecon_modem_t* modem);
-    
+
     enum blecon_ret_t (*get_url)(struct blecon_modem_t* modem, char* url, size_t max_sz);
-    enum blecon_ret_t (*get_identity)(struct blecon_modem_t* modem, uint8_t* uuid);
+    enum blecon_ret_t (*get_identity)(struct blecon_modem_t* modem, uint8_t* id_bytes);
     enum blecon_ret_t (*get_time)(struct blecon_modem_t* modem, bool* time_valid, uint64_t* utc_time_ms_now, uint64_t* utc_time_ms_last_updated);
 
     enum blecon_ret_t (*ping_perform)(struct blecon_modem_t* modem, uint32_t timeout_ms);
@@ -131,12 +132,20 @@ struct blecon_modem_t {
     void* callbacks_user_data;
     bool is_setup;
     bool is_connected;
+
+    // The device-stack tracing channel this modem and everything built on it emit to. Never
+    // NULL for a modem built by a factory or from a platform struct; "disabled" is an
+    // un-set-up (inert) channel. Present whether or not BLECON_TRACING is compiled in.
+    struct blecon_tracing_channel_t* tracing_channel;
 };
 
-void blecon_modem_init(struct blecon_modem_t* modem, const struct blecon_modem_fn_t* fns, struct blecon_event_loop_t* event_loop);
+void blecon_modem_init(struct blecon_modem_t* modem, const struct blecon_modem_fn_t* fns, struct blecon_event_loop_t* event_loop, struct blecon_tracing_channel_t* tracing_channel);
 void blecon_modem_set_callbacks(struct blecon_modem_t* modem, const struct blecon_modem_callbacks_t* callbacks, void* user_data);
 bool blecon_modem_is_setup(struct blecon_modem_t* modem);
 struct blecon_event_loop_t* blecon_modem_get_event_loop(struct blecon_modem_t* modem);
+// The channel given at init. blecon_t routes its own request processor to it, and a port's
+// tracing glue arms a factory-owned channel through it before setup.
+struct blecon_tracing_channel_t* blecon_modem_get_tracing_channel(struct blecon_modem_t* modem);
 enum blecon_ret_t blecon_modem_setup(struct blecon_modem_t* modem);
 enum blecon_ret_t blecon_modem_get_info(struct blecon_modem_t* modem, struct blecon_modem_info_t* info);
 enum blecon_ret_t blecon_modem_set_application_data(struct blecon_modem_t* modem, const uint8_t* application_model_id, uint32_t application_schema_version);

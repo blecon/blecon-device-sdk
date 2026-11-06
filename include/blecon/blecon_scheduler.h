@@ -60,7 +60,6 @@ static inline uint64_t blecon_scheduler_get_monotonic_time(struct blecon_schedul
     return blecon_timer_get_monotonic_time(scheduler->timer);
 }
 
-
 #ifdef __cplusplus
 }
 #endif

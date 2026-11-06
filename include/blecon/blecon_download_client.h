@@ -62,12 +62,7 @@ struct blecon_download_client_t {
     struct blecon_request_send_data_op_t url_send_op;
 };
 
-void blecon_download_client_init(struct blecon_download_client_t* client, 
-    struct blecon_request_processor_t* request_processor,
-    size_t max_concurrent_receive_data_ops,
-    const struct blecon_download_client_callbacks_t* callbacks,
-    void* user_data
-);
+void blecon_download_client_init(struct blecon_download_client_t* client, struct blecon_request_processor_t* request_processor, size_t max_concurrent_receive_data_ops, const struct blecon_download_client_callbacks_t* callbacks, void* user_data);
 
 void blecon_download_client_download(struct blecon_download_client_t* client, const char* url, size_t offset, size_t max_size, void* user_data);
 

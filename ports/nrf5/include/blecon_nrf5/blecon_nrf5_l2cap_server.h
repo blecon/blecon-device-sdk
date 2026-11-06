@@ -19,7 +19,7 @@ extern "C" {
 #include "nrf_sdh_ble.h"
 
 #define BLECON_NRF5_BLUETOOTH_L2CAP_SERVERS_MAX 2
-#define BLECON_NRF5_BLUETOOTH_L2CAP_MPS 247 // Assuming DLE are supported, this is as much as we can send in a PDU (251 bytes - 4-byte L2CAP headers)
+#define BLECON_NRF5_BLUETOOTH_L2CAP_MPS 247                                   // Assuming DLE are supported, this is as much as we can send in a PDU (251 bytes - 4-byte L2CAP headers)
 #define BLECON_NRF5_BLUETOOTH_L2CAP_MTU (BLECON_NRF5_BLUETOOTH_L2CAP_MPS - 2) // This is how much we can send in a SDU so that it's not fragmented over multiple PDUs
 #define BLECON_NRF5_BLUETOOTH_L2CAP_RX_EXTRA_CREDITS 1
 #define BLECON_NRF5_BLUETOOTH_L2CAP_TX_BUF_MAX 2
@@ -27,7 +27,6 @@ extern "C" {
 
 struct blecon_bluetooth_l2cap_server_t* blecon_nrf5_bluetooth_l2cap_server_new(struct blecon_bluetooth_t* bluetooth, uint8_t psm);
 struct blecon_bearer_t* blecon_nrf5_bluetooth_connection_get_l2cap_server_bearer(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_l2cap_server_t* l2cap_server);
-
 
 #ifdef __cplusplus
 }

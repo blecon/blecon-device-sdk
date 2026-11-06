@@ -43,6 +43,8 @@ struct blecon_bluetooth_fn_t {
     struct blecon_bluetooth_gatt_server_t* (*gatt_server_new)(struct blecon_bluetooth_t* bluetooth, const uint8_t* characteristic_uuid);
 
     void (*connection_get_info)(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_connection_info_t* info);
+    // *rssi is this side's RSSI for the connection, or BLECON_BLUETOOTH_RSSI_UNKNOWN when the
+    // port has no reading (none taken yet, or the controller reported none) — never 0.
     void (*connection_get_power_info)(struct blecon_bluetooth_connection_t* connection, int8_t* tx_power, int8_t* rssi);
     void (*connection_disconnect)(struct blecon_bluetooth_connection_t* connection);
     struct blecon_bearer_t* (*connection_get_l2cap_server_bearer)(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_l2cap_server_t* l2cap_server);
@@ -55,10 +57,8 @@ struct blecon_bluetooth_fn_t {
 
 struct blecon_bluetooth_callbacks_t {
     void (*on_new_connection)(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_advertising_set_t* adv_set, void* user_data);
-    void (*on_advertising_report)(struct blecon_bluetooth_t* bluetooth,
-        const struct blecon_bluetooth_advertising_info_t* info,
-        const struct blecon_bluetooth_advertising_data_t* data,
-        void* user_data);
+    // info->rssi is the controller's value as-is: BLECON_BLUETOOTH_RSSI_UNKNOWN when it reported none.
+    void (*on_advertising_report)(struct blecon_bluetooth_t* bluetooth, const struct blecon_bluetooth_advertising_info_t* info, const struct blecon_bluetooth_advertising_data_t* data, void* user_data);
 };
 
 struct blecon_bluetooth_t {
@@ -88,8 +88,8 @@ struct blecon_bluetooth_connection_callbacks_t {
 };
 
 struct blecon_bluetooth_connection_info_t {
-    struct blecon_bluetooth_addr_t our_bt_addr;
-    struct blecon_bluetooth_addr_t peer_bt_addr;
+    struct blecon_bluetooth_device_id_t our_device_id;
+    struct blecon_bluetooth_device_id_t peer_device_id;
     bool is_central : 1;
     enum blecon_bluetooth_phy_t phy;
 };
@@ -106,9 +106,7 @@ static inline void blecon_bluetooth_init(struct blecon_bluetooth_t* bluetooth, c
     bluetooth->callbacks_user_data = NULL;
 }
 
-static inline void blecon_bluetooth_setup(struct blecon_bluetooth_t* bluetooth,
-    struct blecon_scheduler_t* scheduler,
-    const struct blecon_bluetooth_callbacks_t* callbacks, void* callbacks_user_data) {
+static inline void blecon_bluetooth_setup(struct blecon_bluetooth_t* bluetooth, struct blecon_scheduler_t* scheduler, const struct blecon_bluetooth_callbacks_t* callbacks, void* callbacks_user_data) {
     bluetooth->scheduler = scheduler;
     bluetooth->callbacks = callbacks;
     bluetooth->callbacks_user_data = callbacks_user_data;

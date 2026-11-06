@@ -49,11 +49,7 @@ struct blecon_ext_modem_transport_rx_frame_t {
 
 struct blecon_ext_modem_transport_fn_t {
     void (*setup)(struct blecon_ext_modem_transport_t* transport);
-    bool (*exchange_frames)(struct blecon_ext_modem_transport_t* transport, 
-        struct blecon_ext_modem_transport_tx_frame_t* tx_frame,
-        struct blecon_ext_modem_transport_rx_frame_t* rx_frame,
-        bool* event
-    );
+    bool (*exchange_frames)(struct blecon_ext_modem_transport_t* transport, struct blecon_ext_modem_transport_tx_frame_t* tx_frame, struct blecon_ext_modem_transport_rx_frame_t* rx_frame, bool* event);
 };
 
 struct blecon_ext_modem_transport_t {
@@ -76,7 +72,7 @@ static inline size_t blecon_ext_modem_transport_writer_get_remaining_sz(struct b
 }
 
 static inline bool blecon_ext_modem_transport_writer_write(struct blecon_ext_modem_transport_writer_t* writer, const uint8_t* data, size_t sz) {
-    if(writer->remaining_sz < sz) {
+    if( writer->remaining_sz < sz ) {
         return false;
     }
     writer->remaining_sz -= sz;
@@ -109,7 +105,7 @@ static inline size_t blecon_ext_modem_transport_reader_get_remaining_sz(struct b
 }
 
 static inline bool blecon_ext_modem_transport_reader_read(struct blecon_ext_modem_transport_reader_t* reader, uint8_t* data, size_t sz) {
-    if(reader->remaining_sz < sz) {
+    if( reader->remaining_sz < sz ) {
         return false;
     }
     reader->remaining_sz -= sz;
@@ -138,14 +134,8 @@ static inline void blecon_ext_modem_transport_setup(struct blecon_ext_modem_tran
     transport->fns->setup(transport);
 }
 
-static inline bool blecon_ext_modem_transport_exchange_frames(struct blecon_ext_modem_transport_t* transport, 
-    struct blecon_ext_modem_transport_tx_frame_t* tx_frame,
-    struct blecon_ext_modem_transport_rx_frame_t* rx_frame,
-    bool* event
-) {
-    return transport->fns->exchange_frames(transport, 
-        tx_frame, rx_frame, event
-    );
+static inline bool blecon_ext_modem_transport_exchange_frames(struct blecon_ext_modem_transport_t* transport, struct blecon_ext_modem_transport_tx_frame_t* tx_frame, struct blecon_ext_modem_transport_rx_frame_t* rx_frame, bool* event) {
+    return transport->fns->exchange_frames(transport, tx_frame, rx_frame, event);
 }
 
 static inline void blecon_ext_modem_transport_signal(struct blecon_ext_modem_transport_t* transport) {

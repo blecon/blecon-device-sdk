@@ -21,6 +21,11 @@ struct blecon_timer_t;
 struct blecon_timer_fn_t {
     void (*setup)(struct blecon_timer_t* timer);
     uint64_t (*get_monotonic_time)(struct blecon_timer_t* timer);
+    // Same monotonic epoch as get_monotonic_time (relative to event-loop start
+    // on ports where that applies) but at nanosecond resolution. Used by the
+    // tracing subsystem for span timestamps; the millisecond accessor above is
+    // unchanged and keeps its existing callers.
+    uint64_t (*get_monotonic_time_ns)(struct blecon_timer_t* timer);
     void (*set_timeout)(struct blecon_timer_t* timer, uint32_t timeout_ms);
     void (*cancel_timeout)(struct blecon_timer_t* timer);
 };
@@ -42,6 +47,10 @@ static inline void blecon_timer_setup(struct blecon_timer_t* timer, struct bleco
 
 static inline uint64_t blecon_timer_get_monotonic_time(struct blecon_timer_t* timer) {
     return timer->fns->get_monotonic_time(timer);
+}
+
+static inline uint64_t blecon_timer_get_monotonic_time_ns(struct blecon_timer_t* timer) {
+    return timer->fns->get_monotonic_time_ns(timer);
 }
 
 static inline void blecon_timer_set_timeout(struct blecon_timer_t* timer, uint32_t timeout_ms) {

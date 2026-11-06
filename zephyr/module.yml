@@ -5,4 +5,5 @@ build:
   cmake: .
   kconfig: ports/zephyr/Kconfig
   settings:
-    board_root: examples/zephyr/
+    board_root: apps/zephyr/
+    dts_root: ports/zephyr

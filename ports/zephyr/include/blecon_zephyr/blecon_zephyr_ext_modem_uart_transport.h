@@ -15,6 +15,7 @@ extern "C" {
 #include "blecon/port/blecon_ext_modem_transport.h"
 #include "zephyr/sys/ring_buffer.h"
 #include "zephyr/drivers/uart.h"
+#include "zephyr/kernel.h"
 
 struct blecon_event_loop_t;
 
@@ -32,8 +33,7 @@ struct blecon_zephyr_ext_modem_uart_transport_t {
     uint8_t rx_fifo_buf[CONFIG_BLECON_EXTERNAL_MODEM_UART_TRANSPORT_RX_FIFO_SZ];
 };
 
-void blecon_zephyr_ext_modem_uart_transport_init(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport,
-    struct blecon_event_loop_t* event_loop, const struct device* uart_device);
+void blecon_zephyr_ext_modem_uart_transport_init(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, struct blecon_event_loop_t* event_loop, const struct device* uart_device);
 
 static inline struct blecon_ext_modem_transport_t* blecon_zephyr_ext_modem_uart_transport_as_transport(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport) {
     return &ext_modem_uart_transport->ext_modem_transport;

@@ -1,44 +1,32 @@
 manifest:
+  group-filter: [-find-my, -babblesim, -nrf-802154, -dragoon, -libmodem, -bsec, -doc-internal]
   projects:
     - name: nrf
-      revision: v2.8.0
+      revision: v3.4.1
       url: https://github.com/nrfconnect/sdk-nrf
-      import: true
+      path: nrf
+      import:
+        name-blocklist:
+          - matter
+        path-prefix: west-ws
     - name: zephyr
-      revision: v3.7.99-ncs1
+      revision: ncs-v3.4.1
       url: https://github.com/nrfconnect/sdk-zephyr
+      path: zephyr
       import:
         name-allowlist:
-          - TraceRecorderSource
-          - canopennode
-          - chre
           - cmsis
-          - edtt
-          - fatfs
+          - cmsis_6
           - hal_nordic
           - hal_st
           - hal_stm32
-          - hal_wurthelektronik
-          - liblc3
-          - libmetal
-          - littlefs
-          - loramac-node
-          - lvgl
-          - lz4
-          - mipi-sys-t
           - nanopb
-          - net-tools
           - nrf_hw_models
-          - open-amp
           - picolibc
-          - psa-arch-tests
           - segger
-          - tinycbor
-          - tinycrypt
-          - tf-m-tests
-          - uoscore-uedhoc
+          - tf-psa-crypto
           - zcbor
-          - zscilib
+        path-prefix: west-ws
 
   self:
     path: blecon-device-sdk

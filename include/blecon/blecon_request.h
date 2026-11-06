@@ -32,7 +32,7 @@ typedef uint32_t blecon_request_id_t; ///< A request ID
 
 /**
  * @brief Callbacks structure to populate by user for requests
- * 
+ *
  */
 struct blecon_request_callbacks_t {
     /**
@@ -54,9 +54,9 @@ struct blecon_request_callbacks_t {
      * @param receive_data_op the receive data operation instance
      * @param sz the size of the buffer to allocate
      * @return a pointer to the allocated buffer
-     */    
+     */
     uint8_t* (*alloc_incoming_data_buffer)(struct blecon_request_receive_data_op_t* receive_data_op, size_t sz);
-    
+
     /**
      * @brief Called when new data is received for a request.
      * @param receive_data_op the receive data operation instance
@@ -70,22 +70,22 @@ struct blecon_request_callbacks_t {
 
 /**
  * @brief A structure used to build a request based on its attributes
- * 
+ *
  */
 struct blecon_request_parameters_t {
-    bool oneway; ///< If true, the request is one-way (no response expected)
-    const char* namespace; ///< The namespace of this request's event type (maximum BLECON_NAMESPACE_MAX_SZ characters, including null terminator) or NULL
-    const char* method; ///< The method of this request's event type (maximum BLECON_METHOD_MAX_SZ characters, including null terminator) or NULL
-    const char* request_content_type; ///< The content type of the request (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
-    const char* response_content_type; ///< The expected content type of the response (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
-    size_t response_mtu; ///< The maximum size of a response data frame (for a single data operation, maximum BLECON_MTU)
+    bool oneway;                                        ///< If true, the request is one-way (no response expected)
+    const char* _namespace;                             ///< The namespace of this request's event type (maximum BLECON_NAMESPACE_MAX_SZ characters, including null terminator) or NULL
+    const char* method;                                 ///< The method of this request's event type (maximum BLECON_METHOD_MAX_SZ characters, including null terminator) or NULL
+    const char* request_content_type;                   ///< The content type of the request (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
+    const char* response_content_type;                  ///< The expected content type of the response (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
+    size_t response_mtu;                                ///< The maximum size of a response data frame (for a single data operation, maximum BLECON_MTU)
     const struct blecon_request_callbacks_t* callbacks; ///< The callbacks to use for this request
-    void* user_data; ///< User data to pass to the callbacks
+    void* user_data;                                    ///< User data to pass to the callbacks
 };
 
 /**
  * @brief Initialise a request
- * 
+ *
  * @param request the request instance to initialise
  * @param parameters a struct blecon_request_parameters_t structure containing the request's parameters
  */
@@ -93,7 +93,7 @@ void blecon_request_init(struct blecon_request_t* request, const struct blecon_r
 
 /**
  * @brief Retrieve a request's parameters
- * 
+ *
  * @param request the request instance
  * @return a pointer to the request's parameters
  */
@@ -101,7 +101,7 @@ const struct blecon_request_parameters_t* blecon_request_get_parameters(struct b
 
 /**
  * @brief Get the status of a request
- * 
+ *
  * @param request the request instance
  * @return the status code of the request
  */
@@ -109,7 +109,7 @@ enum blecon_request_status_code_t blecon_request_get_status(struct blecon_reques
 
 /**
  * @brief Send data for a request
- * 
+ *
  * @param op a pointer to a struct blecon_request_send_data_op_t structure which is populated on success
  * @param request a pointer to the relevant request structure
  * @param data the data to send
@@ -120,13 +120,14 @@ enum blecon_request_status_code_t blecon_request_get_status(struct blecon_reques
  */
 bool blecon_request_send_data(
     struct blecon_request_send_data_op_t* op,
-    struct blecon_request_t* request, 
+    struct blecon_request_t* request,
     const uint8_t* data, size_t sz, bool finished,
-    void* user_data);
+    void* user_data
+);
 
 /**
  * @brief Get the user data associated with a send data operation
- * 
+ *
  * @param op the send data operation instance
  * @return a pointer to the user data
  */
@@ -134,7 +135,7 @@ void* blecon_request_send_data_op_get_user_data(struct blecon_request_send_data_
 
 /**
  * @brief Start a receiving operation
- * 
+ *
  * @param op a pointer to a struct blecon_request_receive_data_op_t structure which is populated on success
  * @param request a pointer to the relevant request structure
  * @param user_data a pointer to user-defined data which will be associated with the operation
@@ -143,11 +144,12 @@ void* blecon_request_send_data_op_get_user_data(struct blecon_request_send_data_
 bool blecon_request_receive_data(
     struct blecon_request_receive_data_op_t* op,
     struct blecon_request_t* request,
-    void* user_data);
+    void* user_data
+);
 
 /**
  * @brief Get the user data associated with a receive data operation
- * 
+ *
  * @param op the receive data operation instance
  * @return a pointer to the user data
  */
@@ -155,7 +157,7 @@ void* blecon_request_receive_data_op_get_user_data(struct blecon_request_receive
 
 /**
  * @brief Clean-up a request
- * 
+ *
  * @param request the request to clean-up
  */
 void blecon_request_cleanup(struct blecon_request_t* request);
@@ -163,7 +165,7 @@ void blecon_request_cleanup(struct blecon_request_t* request);
 struct blecon_request_t {
     // Parameters
     const struct blecon_request_parameters_t* parameters;
-    
+
     // State
     struct blecon_request_processor_t* processor;
     blecon_request_id_t id;
@@ -186,6 +188,10 @@ struct blecon_request_t {
     struct blecon_list_t receive_data_ops_list;
 
     struct blecon_list_node_t requests_list_node;
+
+    // This request's request.request root span, 0 when none is live. Opened at submit and
+    // closed at close/cleanup, so it is non-zero only while the request is in flight.
+    blecon_tracing_id_t trace_span_id;
 };
 
 struct blecon_request_send_data_op_t {

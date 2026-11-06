@@ -37,4 +37,3 @@ void blecon_mutex_unlock(struct blecon_mutex_t* mutex) {
 void blecon_mutex_free(struct blecon_mutex_t* mutex) {
     free(mutex);
 }
-

@@ -45,8 +45,8 @@ struct blecon_nrf5_bluetooth_advertising_t {
 struct blecon_nrf5_bluetooth_connection_t {
     struct blecon_bluetooth_connection_t connection;
     uint16_t handle;
-    struct blecon_bluetooth_addr_t our_bt_addr;
-    struct blecon_bluetooth_addr_t peer_bt_addr;
+    struct blecon_bluetooth_device_id_t our_device_id;
+    struct blecon_bluetooth_device_id_t peer_device_id;
     enum blecon_bluetooth_phy_t phy;
 };
 

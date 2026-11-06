@@ -36,12 +36,7 @@ struct blecon_memfault_client_t {
     uint8_t receive_buffer[16];
 };
 
-void blecon_memfault_client_init(struct blecon_memfault_client_t* client, 
-    struct blecon_request_processor_t* request_processor,
-    struct blecon_memfault_t* memfault,
-    const uint8_t* blecon_id,
-    const char* request_namespace
-);
+void blecon_memfault_client_init(struct blecon_memfault_client_t* client, struct blecon_request_processor_t* request_processor, struct blecon_memfault_t* memfault, const uint8_t* blecon_id, const char* request_namespace);
 
 #ifdef __cplusplus
 }

@@ -11,6 +11,7 @@ target_sources(blecon_nrf5 PRIVATE
   src/blecon_nrf5_gatts_bearer.c
   src/blecon_nrf5_nfc.c
   src/blecon_nrf5_nvm.c
+  src/blecon_nrf5_otp.c
   src/blecon_nrf5_l2cap_server.c
   src/blecon_nrf5_aead_cipher.h
 )

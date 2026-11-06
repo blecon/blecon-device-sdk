@@ -9,13 +9,20 @@ project(blecon)
 
 include(CMakeDependentOption)
 cmake_dependent_option(BLECON_ZEPHYR_PORT "Compile Zephyr port" ON "DEFINED ZEPHYR_BASE" OFF)
+cmake_dependent_option(BLECON_ANDROID_PORT "Compile Android port" ON "ANDROID" OFF)
 
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${PROJECT_SOURCE_DIR}/third-party/nanopb/extra)
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${PROJECT_SOURCE_DIR}/deps/third-party/nanopb/extra)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 
 enable_language(ASM C)
+
+if(MSVC)
+  # MSVC's CRT marks standard C functions like strcpy/strcat as deprecated; silence
+  # those warnings since the project targets cross-platform standard C, not MS *_s variants.
+  add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/blecon-source.cmake")
   set(BLECON_HAS_SOURCE TRUE)
@@ -41,6 +48,14 @@ if((NOT (DEFINED ZEPHYR_BASE)) OR CONFIG_BLECON)
   endif()
 
   if(BLECON_NRF5_EXAMPLES)
-    add_subdirectory("examples/nrf5")
+    add_subdirectory("apps/nrf5")
+  endif()
+
+  if(BLECON_ANDROID_PORT)
+    add_subdirectory("ports/android/src/main/cpp")
+  endif()
+
+  if(BLECON_WINDOWS_PORT)
+    add_subdirectory("ports/windows")
   endif()
 endif()

@@ -13,7 +13,6 @@ extern "C" {
 #include "stdint.h"
 #include "stddef.h"
 
-
 struct blecon_list_node_t;
 
 struct blecon_list_t {

@@ -16,6 +16,7 @@ struct blecon_zephyr_timer_t;
 
 static void blecon_zephyr_timer_setup(struct blecon_timer_t* timer);
 static uint64_t blecon_zephyr_timer_get_monotonic_time(struct blecon_timer_t* timer);
+static uint64_t blecon_zephyr_timer_get_monotonic_time_ns(struct blecon_timer_t* timer);
 static void blecon_zephyr_timer_set_timeout(struct blecon_timer_t* timer, uint32_t timeout_ms);
 static void blecon_zephyr_timer_cancel_timeout(struct blecon_timer_t* timer);
 
@@ -30,12 +31,13 @@ struct blecon_timer_t* blecon_zephyr_timer_new(void) {
     static const struct blecon_timer_fn_t timer_fn = {
         .setup = blecon_zephyr_timer_setup,
         .get_monotonic_time = blecon_zephyr_timer_get_monotonic_time,
+        .get_monotonic_time_ns = blecon_zephyr_timer_get_monotonic_time_ns,
         .set_timeout = blecon_zephyr_timer_set_timeout,
         .cancel_timeout = blecon_zephyr_timer_cancel_timeout,
     };
 
     struct blecon_zephyr_timer_t* zephyr_timer = BLECON_ALLOC(sizeof(struct blecon_zephyr_timer_t));
-    if(zephyr_timer == NULL) {
+    if( zephyr_timer == NULL ) {
         blecon_fatal_error();
     }
 
@@ -48,14 +50,22 @@ struct blecon_timer_t* blecon_zephyr_timer_new(void) {
 
 void blecon_zephyr_timer_setup(struct blecon_timer_t* timer) {
     struct blecon_zephyr_timer_t* zephyr_timer = (struct blecon_zephyr_timer_t*) timer;
-    (void)zephyr_timer;
+    (void) zephyr_timer;
 }
 
 uint64_t blecon_zephyr_timer_get_monotonic_time(struct blecon_timer_t* timer) {
     struct blecon_zephyr_timer_t* zephyr_timer = (struct blecon_zephyr_timer_t*) timer;
-    (void)zephyr_timer;
+    (void) zephyr_timer;
 
-    return (uint64_t)k_uptime_get();
+    return (uint64_t) k_uptime_get();
+}
+
+uint64_t blecon_zephyr_timer_get_monotonic_time_ns(struct blecon_timer_t* timer) {
+    struct blecon_zephyr_timer_t* zephyr_timer = (struct blecon_zephyr_timer_t*) timer;
+    (void) zephyr_timer;
+
+    // Same boot-relative epoch as k_uptime_get(), at nanosecond resolution.
+    return (uint64_t) k_ticks_to_ns_floor64(k_uptime_ticks());
 }
 
 void blecon_zephyr_timer_set_timeout(struct blecon_timer_t* timer, uint32_t timeout_ms) {
@@ -71,8 +81,7 @@ void blecon_zephyr_timer_cancel_timeout(struct blecon_timer_t* timer) {
 }
 
 void blecon_zephyr_timer_on_timeout(struct k_timer* timer) {
-    struct blecon_zephyr_timer_t* zephyr_timer 
-        = (struct blecon_zephyr_timer_t*) ((char*)timer - offsetof(struct blecon_zephyr_timer_t, z_timer));
+    struct blecon_zephyr_timer_t* zephyr_timer = (struct blecon_zephyr_timer_t*) ((char*) timer - offsetof(struct blecon_zephyr_timer_t, z_timer));
 
     blecon_timer_on_timeout(&zephyr_timer->timer);
 }

@@ -5,7 +5,6 @@
 config BLECON
     bool "Blecon library"
     default n
-    select REQUIRES_STD_C11
     help
         Enable the Blecon device library
 
@@ -13,8 +12,8 @@ if BLECON
 
 choice
     bool "Modem type"
-    default BLECON_INTERNAL_MODEM if (SOC_SERIES_NRF52X || SOC_SERIES_NRF53X || SOC_SERIES_NRF54LX)
-    default BLECON_EXTERNAL_MODEM if !(SOC_SERIES_NRF52X || SOC_SERIES_NRF53X || SOC_SERIES_NRF54LX)
+    default BLECON_INTERNAL_MODEM if (SOC_SERIES_NRF52 || SOC_SERIES_NRF53 || SOC_SERIES_NRF54L || BOARD_NATIVE_SIM || BOARD_NATIVE_SIM_NATIVE_64)
+    default BLECON_EXTERNAL_MODEM if !(SOC_SERIES_NRF52 || SOC_SERIES_NRF53 || SOC_SERIES_NRF54L || BOARD_NATIVE_SIM || BOARD_NATIVE_SIM_NATIVE_64)
 
 config BLECON_INTERNAL_MODEM
     bool "Blecon internal modem"
@@ -56,7 +55,9 @@ config BLECON_EXTERNAL_MODEM_UART_TRANSPORT_RX_FIFO_SZ
 config BLECON_PORT_CRYPTO
     bool "Blecon crypto port"
     default n
-    depends on NRF_SECURITY
+    # PSA Crypto API with a provider: Oberon through nrf_security on Nordic targets,
+    # Zephyr's TF-PSA-Crypto on native_sim. The provider choice selects MBEDTLS_PSA_CRYPTO_C.
+    depends on PSA_CRYPTO
     depends on MBEDTLS_PSA_CRYPTO_C
     depends on MBEDTLS_ENABLE_HEAP
     depends on MBEDTLS_HEAP_SIZE >= 8192
@@ -64,7 +65,6 @@ config BLECON_PORT_CRYPTO
     select PSA_WANT_ALG_HMAC
     select PSA_WANT_ALG_CHACHA20_POLY1305
     select PSA_WANT_ALG_ECDH
-    select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR
     select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_BASIC
     select PSA_WANT_KEY_TYPE_ECC_PUBLIC_KEY
     select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_IMPORT
@@ -87,10 +87,22 @@ config BLECON_PORT_NVM_ERASE
     default n
     depends on BLECON_PORT_NVM
 
+config BLECON_PORT_OTP
+    bool "Blecon OTP port"
+    default y if $(dt_nodelabel_enabled,blecon_otp)
+    # The OTP backend supports two modes: memory-mapped (no flash driver
+    # involved) or flash-backed via flash_read() (used on native_sim where
+    # the OTP image lives in a fixed-partition under sim-flash). The
+    # flash-backed path needs the flash driver; depending on FLASH here is
+    # cheap (every supported target enables it anyway for NVM) and lets the
+    # OTP source use flash.h unconditionally.
+    depends on FLASH
+
 config BLECON_PORT_BLUETOOTH
     bool "Blecon Bluetooth port"
     default n
-    depends on SOC_SERIES_NRF52X || SOC_SERIES_NRF53X || SOC_SERIES_NRF54LX
+    # Support Nordic SoCs and native_sim for integration testing
+    depends on SOC_SERIES_NRF52 || SOC_SERIES_NRF53 || SOC_SERIES_NRF54L || BOARD_NATIVE_SIM || BOARD_NATIVE_SIM_NATIVE_64
     depends on BT
     depends on BT_PERIPHERAL
     depends on BT_USER_PHY_UPDATE
@@ -135,6 +147,205 @@ config BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS
     int "Maximum number of Bluetooth connections"
     default 1
     depends on BLECON_PORT_BLUETOOTH
+
+config BLECON_TRACING
+    bool "Enable Blecon stack tracing"
+    default n
+    # An external-modem build has no on-device stack to trace; the port's tracing glue
+    # (blecon_zephyr_tracing.c) wires trace transports only for the internal modem.
+    depends on BLECON_INTERNAL_MODEM
+    help
+        Compile the Blecon stack tracing support: the tracing core, the
+        instrumentation call sites and their generated trace encoders (from
+        tracing/libblecon.yaml). One switch, all or nothing. Off by default:
+        default production builds carry no tracing code at all. This symbol
+        drives the CMake option of the same name; a trace backend is selected
+        separately.
+
+choice BLECON_TRACING_BACKEND
+    prompt "Device tracing backend"
+    depends on BLECON_TRACING
+    default BLECON_TRACING_BACKEND_INBAND
+    help
+        Selects how the device-side SLIP trace stream leaves the device. Exactly
+        one backend is compiled in — the tracing channel has a single byte sink,
+        so the backends are mutually exclusive (no fan-out/tee).
+
+config BLECON_TRACING_BACKEND_INBAND
+    bool "In-band over the Blecon network"
+    help
+        Buffer the SLIP trace stream in a fixed circular RAM buffer and, on each
+        Blecon connection, upload it to the network as a dedicated trace request
+        (global:blecon_trace / upload) alongside the app's own requests. The
+        upload is submitted by the internal modem on its internal request
+        processor, so it carries the `internal` header like the modem's own
+        network requests. No dedicated trace transport hardware is required.
+
+config BLECON_TRACING_BACKEND_UART
+    bool "Off-device UART (SLIP over a dedicated UART)"
+    select BLECON_TRACING_SERIAL_SINK
+    help
+        Emit the SLIP trace stream out a dedicated UART, interrupt-driven so the
+        event loop never blocks. The target UART is the devicetree chosen node
+        blecon,trace-uart (an app overlay must provide it -- see the hello-world
+        tracing-uart variant, which routes it out uart0 on the nRF52840DK, the
+        onboard J-Link VCOM, and moves the console/shell to uart1 on the arduino
+        header). An off-host collector captures the stream via a serial bridge.
+
+config BLECON_TRACING_BACKEND_USB_CDC_ACM
+    bool "Off-device USB CDC ACM (SLIP over serial-over-USB)"
+    select BLECON_TRACING_SERIAL_SINK
+    select USB_DEVICE_STACK_NEXT
+    help
+        Emit the SLIP trace stream out a USB CDC ACM virtual serial port. The
+        same interrupt-driven serial sink as the UART backend drives it -- the
+        devicetree chosen node blecon,trace-uart points at a zephyr,cdc-acm-uart
+        instance (an app overlay must provide it -- see the hello-world
+        tracing-usb-cdc variant). The CDC ACM class auto-enables from that node,
+        and the port glue (blecon_zephyr_tracing.c) brings the USB device up
+        itself, so selecting this backend needs no app-level USB code. An
+        off-host collector captures the stream over the USB serial port.
+
+config BLECON_TRACING_BACKEND_SWO
+    bool "Off-device SWO/ITM (true CoreSight SWV via J-Link)"
+    depends on HAS_SWO
+    help
+        Emit the SLIP trace stream out a genuine ARM CoreSight SWV (Serial Wire
+        Viewer) single pin -- the ITM stimulus port -- captured by the board's
+        J-Link. This is true SWO/ITM (DEMCR/TPIU/ITM bring-up, then ITM->PORT[n]
+        byte writes), not SEGGER RTT. Needs no devicetree overlay, but it does
+        claim the SoC's SWO/TRACEDATA0 pin for the whole image (P1.00 on the
+        nRF52840): selecting this backend defines ENABLE_SWO, so the vendor MDK's
+        SystemInit() selects the trace mux and configures that pin at boot, making
+        it unavailable as a GPIO. Capture the stream via the board's J-Link with
+        scripts/trace-capture-swo.py.
+
+endchoice
+
+config BLECON_TRACING_SWO_PORT
+    int "ITM stimulus port for the SWO trace stream"
+    default 0
+    range 0 31
+    depends on BLECON_TRACING_BACKEND_SWO
+    help
+        The ITM stimulus port the SLIP trace stream is written to (0-31). Must
+        differ from the SWO log backend's fixed stimulus port 0 if LOG_BACKEND_SWO
+        is also enabled -- a build assertion enforces this so the two streams do
+        not interleave on the same port.
+
+config BLECON_TRACING_SWO_REF_FREQ_HZ
+    int "SWO reference clock frequency (Hz)"
+    depends on BLECON_TRACING_BACKEND_SWO
+    default $(dt_node_int_prop_int,$(dt_nodelabel_path,itm),swo-ref-frequency) if $(dt_nodelabel_enabled,itm)
+    default $(dt_node_int_prop_int,/cpus/cpu@0,clock-frequency) if $(dt_node_has_prop,/cpus/cpu@0,clock-frequency)
+    default 0
+    help
+        SWO reference clock frequency, used to derive the TPIU prescaler. Defaults
+        to the itm devicetree node's swo-ref-frequency (or the CPU clock frequency)
+        -- the same default the Zephyr SWO log backend uses. In most cases the
+        default is correct.
+
+config BLECON_TRACING_SWO_FREQ_HZ
+    int "SWO output frequency (Hz)"
+    depends on BLECON_TRACING_BACKEND_SWO
+    default 1000000
+    help
+        SWO output frequency configured at boot, as a divider of the reference
+        clock. The device is authoritative: the capture host must be told this same
+        frequency (scripts/trace-capture-swo.py --swo-freq).
+
+        The default (1 MHz) divides both the nRF52840's 32 MHz trace reference clock
+        and a J-Link's 12 MHz SWO base clock exactly, so device and probe agree with
+        no rounding. Do not use 0 ("maximum", reference clock / 1) unless the capture
+        probe can receive at the full reference clock -- at 32 MHz on the nRF52840
+        no J-Link can, and the resulting stream decodes to nothing.
+
+config BLECON_TRACING_SERIAL_SINK
+    bool
+    select SERIAL
+    select UART_INTERRUPT_DRIVEN
+    help
+        Internal helper symbol selected by the serial-family off-device backends
+        (UART, USB CDC ACM) that share the interrupt-driven serial trace transport
+        (blecon_zephyr_trace_serial_transport.c). Pulls in the interrupt-driven
+        serial API both the physical UART and the CDC ACM virtual UART need. Not
+        selectable directly.
+
+config BLECON_TRACING_SERIAL_BUFFER_SIZE
+    int "Off-device serial trace TX ring buffer size (bytes)"
+    default 4096
+    depends on BLECON_TRACING_SERIAL_SINK
+    help
+        Size of the TX ring buffer feeding the interrupt-driven serial trace
+        output. When it overflows the oldest buffered bytes are dropped (with a
+        counter); the continuous stream carries the boot preamble naturally and
+        the decoder resyncs at the next SLIP END.
+
+        It must hold the whole boot preamble, which blecon_int_modem_setup emits
+        in one synchronous burst far faster than a UART drains it: its config
+        record alone is the whole compressed tracing spec (about 2.6 KB,
+        BLECON_TRACING_TRACE_CONFIG_SIZE in the generated header). A ring smaller
+        than the burst drops its head -- init and the start of config -- and the
+        capture then has nothing to decode against.
+        tracing/python/tests/test_device_config.py pins the default's margin
+        over the real spec.
+
+config BLECON_TRACING_INBAND_BUFFER_SIZE
+    int "In-band trace RAM ring buffer size (bytes)"
+    default 4096
+    depends on BLECON_TRACING_BACKEND_INBAND
+    help
+        Size of the circular RAM buffer holding the SLIP trace stream between
+        Blecon connections. Overwrite-oldest when full (lossy); sticky records
+        (init/config/anchor plus the started log) are retained separately and
+        prepended to every upload, so each upload stays self-decodable even after
+        the ring has wrapped past the boot-time preamble.
+
+        A whole drain (ring plus re-escaped sticky preamble) must fit the transport's
+        fixed send-op array, so the effective ceiling is a few KB below
+        BLECON_TRACE_INBAND_MAX_SEND_OPS * BLECON_MTU; a too-large value is caught
+        at compile time by a _Static_assert in blecon_zephyr_tracing.c rather than
+        silently overflowing.
+
+config BLECON_TRACING_INBAND_STICKY_MAX_SLOTS
+    int "In-band trace sticky side-buffer slot count"
+    default 8
+    range 1 64
+    depends on BLECON_TRACING_BACKEND_INBAND
+    help
+        Maximum number of distinct sticky record numbers the in-band RAM transport
+        retains alongside the ring (the latest copy of each). The device emits six
+        sticky records today (init, config, anchor, app_build_info,
+        libblecon_build_info and the int_modem started log); the default leaves
+        headroom for future ones. A sticky record that finds no free slot is
+        counted by blecon_trace_ram_transport_sticky_dropped() and uploads may then
+        not be self-decodable.
+
+config BLECON_TRACING_INBAND_STICKY_POOL_SIZE
+    int "In-band trace sticky side-buffer pool size (bytes)"
+    default 3584
+    depends on BLECON_TRACING_BACKEND_INBAND
+    help
+        Byte pool holding every retained sticky record at once (unescaped, packed).
+        The well-known config record dominates: its payload is the whole compressed
+        tracing spec (about 2.6 KB, BLECON_TRACING_TRACE_CONFIG_SIZE in the
+        generated header); the rest sum to a few hundred bytes. Keep headroom above
+        that sum -- a record that does not fit is counted by
+        blecon_trace_ram_transport_sticky_dropped(). Every retained byte may double
+        when re-escaped on upload, so this figure also grows the transport's send
+        buffer (BLECON_TRACE_INBAND_SEND_BUFFER_SIZE) by twice its value.
+
+config BLECON_TRACING_INBAND_STICKY_SCRATCH_SIZE
+    int "In-band trace sticky frame scratch size (bytes)"
+    default 3072
+    depends on BLECON_TRACING_BACKEND_INBAND
+    help
+        Scratch space in which the in-band RAM transport unescapes the single frame
+        currently being parsed, to decide whether it is sticky and retain it. Must
+        fit the largest single sticky record -- again the config record -- with
+        headroom for the spec to grow (the default mirrors
+        BLECON_TRACE_RAM_STICKY_SCRATCH_SIZE in blecon_trace_ram_transport.h, which
+        test/trace_ram_transport_test.cpp pins against the real preamble).
 
 config BLECON_MEMFAULT
     bool "Enable Memfault integration"

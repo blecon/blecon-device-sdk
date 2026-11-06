@@ -26,7 +26,6 @@ struct blecon_zephyr_l2cap_bearer_t {
     struct bt_l2cap_le_chan l2cap_chan;
 };
 
-
 void blecon_zephyr_l2cap_bearer_init_server(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer, struct blecon_event_loop_t* event_loop);
 void blecon_zephyr_l2cap_bearer_server_accept(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer, struct bt_conn* conn, struct bt_l2cap_chan** chan);
 

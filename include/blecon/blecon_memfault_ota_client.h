@@ -42,13 +42,7 @@ struct blecon_memfault_ota_client_t {
     bool checking_for_update : 1;
 };
 
-void blecon_memfault_ota_client_init(struct blecon_memfault_ota_client_t* client, 
-    struct blecon_request_processor_t* request_processor,
-    const struct blecon_memfault_ota_parameters_t* parameters,
-    const char* request_namespace,
-    const struct blecon_memfault_ota_client_callbacks_t* callbacks,
-    void* user_data
-);
+void blecon_memfault_ota_client_init(struct blecon_memfault_ota_client_t* client, struct blecon_request_processor_t* request_processor, const struct blecon_memfault_ota_parameters_t* parameters, const char* request_namespace, const struct blecon_memfault_ota_client_callbacks_t* callbacks, void* user_data);
 
 void blecon_memfault_ota_client_check_for_update(struct blecon_memfault_ota_client_t* client);
 

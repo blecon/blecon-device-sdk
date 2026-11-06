@@ -1,0 +1,45 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Blecon OTP memory region.
+
+  The node may be wired up two different ways depending on the target:
+
+  1. Memory-mapped OTP (real chips). The node is at top level, with a
+     `compatible = "blecon,otp"` and a `reg = <addr size>` pointing at a
+     directly-readable hardware OTP address.
+
+  2. Flash-backed OTP (native_sim and any platform whose OTP image lives
+     in a flash partition). The node sits as a fixed-partition child of a
+     flash controller's `partitions` block; the `reg` value is then a
+     flash offset and `blecon_zephyr_otp.c` reads via the flash driver.
+
+  The two modes are auto-detected by inspecting the parent compatible.
+
+compatible: "blecon,otp"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+  neobeacon-v8-id-offset:
+    type: int
+    description: >
+      Byte offset of the NeoBeacon V8 unique ID within the OTP region.
+      If not specified, NeoBeacon V8 ID is not available from OTP.
+      The unique ID is stored as 6 raw bytes little-endian (OTP byte
+      order; matches the V2 wire `unique_id` field and the V7
+      advertising frame). HKDF derivations (claim code, ID assignment
+      proof) byte-reverse this to big-endian before packing as `info` —
+      see `deps/neobeacon/neobeacon_id.md`.
+  neobeacon-v8-id-assignment-proof-offset:
+    type: int
+    description: >
+      Byte offset of the NeoBeacon V8 ID assignment proof within the OTP
+      region. If not specified, no ID assignment proof is available from
+      OTP and the device is treated as having no manufacturer-assigned ID
+      to prove. The proof is 32 raw bytes — opaque HKDF-SHA256 output
+      keyed by the manufacturer key over the device unique ID with salt
+      "neobeacon id assignment proof", so byte order does not apply.

@@ -25,6 +25,7 @@
 
 static void blecon_nrf5_timer_setup(struct blecon_timer_t* timer);
 static uint64_t blecon_nrf5_timer_get_monotonic_time(struct blecon_timer_t* timer);
+static uint64_t blecon_nrf5_timer_get_monotonic_time_ns(struct blecon_timer_t* timer);
 static void blecon_nrf5_timer_set_timeout(struct blecon_timer_t* timer, uint32_t timeout_ms);
 static void blecon_nrf5_timer_cancel_timeout(struct blecon_timer_t* timer);
 
@@ -45,6 +46,7 @@ struct blecon_timer_t* blecon_nrf5_timer_init(void) {
     static const struct blecon_timer_fn_t timer_fn = {
         .setup = blecon_nrf5_timer_setup,
         .get_monotonic_time = blecon_nrf5_timer_get_monotonic_time,
+        .get_monotonic_time_ns = blecon_nrf5_timer_get_monotonic_time_ns,
         .set_timeout = blecon_nrf5_timer_set_timeout,
         .cancel_timeout = blecon_nrf5_timer_cancel_timeout
     };
@@ -59,12 +61,10 @@ struct blecon_timer_t* blecon_nrf5_timer_init(void) {
 
 void blecon_nrf5_timer_setup(struct blecon_timer_t* timer) {
     // Create timers
-    ret_code_t err_code = app_timer_create(&_timeout_timer_id,
-        APP_TIMER_MODE_SINGLE_SHOT, blecon_nrf5_timeout_handler);
+    ret_code_t err_code = app_timer_create(&_timeout_timer_id, APP_TIMER_MODE_SINGLE_SHOT, blecon_nrf5_timeout_handler);
     blecon_assert(err_code == NRF_SUCCESS);
 
-    err_code = app_timer_create(&_monotonic_ticks_offset_monitor_timer_id,
-        APP_TIMER_MODE_REPEATED, blecon_nrf5_monotonic_time_offset_monitor_handler);
+    err_code = app_timer_create(&_monotonic_ticks_offset_monitor_timer_id, APP_TIMER_MODE_REPEATED, blecon_nrf5_monotonic_time_offset_monitor_handler);
     blecon_assert(err_code == NRF_SUCCESS);
 
     // Set initial offset
@@ -79,24 +79,32 @@ void blecon_nrf5_timer_setup(struct blecon_timer_t* timer) {
 
 uint64_t blecon_nrf5_timer_get_monotonic_time(struct blecon_timer_t* timer) {
     blecon_nrf5_update_monotonic_ticks();
-    
-    uint64_t time =  _monotonic_ticks >> RTC_FREQUENCY_DIVISOR; // Divide by RTC frequency (+ prescaler) to get seconds
+
+    uint64_t time = _monotonic_ticks >> RTC_FREQUENCY_DIVISOR;                      // Divide by RTC frequency (+ prescaler) to get seconds
     uint32_t remainder = _monotonic_ticks & ~(UINT32_MAX << RTC_FREQUENCY_DIVISOR); // Get remainder
     time = time * 1000ul + ((remainder * 1000ul) >> RTC_FREQUENCY_DIVISOR);
     return time;
 }
 
+uint64_t blecon_nrf5_timer_get_monotonic_time_ns(struct blecon_timer_t* timer) {
+    blecon_nrf5_update_monotonic_ticks();
+
+    uint64_t seconds = _monotonic_ticks >> RTC_FREQUENCY_DIVISOR;                   // Divide by RTC frequency (+ prescaler) to get seconds
+    uint32_t remainder = _monotonic_ticks & ~(UINT32_MAX << RTC_FREQUENCY_DIVISOR); // Get remainder
+    return seconds * 1000000000ull + (((uint64_t) remainder * 1000000000ull) >> RTC_FREQUENCY_DIVISOR);
+}
+
 void blecon_nrf5_timer_set_timeout(struct blecon_timer_t* timer, uint32_t timeout_ms) {
     uint32_t ticks = 0;
-    
-    if(timeout_ms > (1000ul * MAX_RTC_COUNTER_VAL) / (APP_TIMER_CLOCK_FREQ / (1ul + APP_TIMER_CONFIG_RTC_FREQUENCY)) - 1) {
+
+    if( timeout_ms > (1000ul * MAX_RTC_COUNTER_VAL) / (APP_TIMER_CLOCK_FREQ / (1ul + APP_TIMER_CONFIG_RTC_FREQUENCY)) - 1 ) {
         // Maximum timeout
         ticks = MAX_RTC_COUNTER_VAL;
     } else {
         ticks = APP_TIMER_TICKS(timeout_ms);
     }
-    
-    if(ticks < 5) { // minimum ticks for timer api
+
+    if( ticks < 5 ) { // minimum ticks for timer api
         ticks = 5;
     }
 

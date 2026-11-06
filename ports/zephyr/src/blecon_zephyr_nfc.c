@@ -41,7 +41,7 @@ struct blecon_nfc_t* blecon_zephyr_nfc_init(void) {
     };
 
     struct blecon_zephyr_nfc_t* zephyr_nfc = BLECON_ALLOC(sizeof(struct blecon_zephyr_nfc_t));
-    if(zephyr_nfc == NULL) {
+    if( zephyr_nfc == NULL ) {
         blecon_fatal_error();
     }
 
@@ -55,7 +55,7 @@ struct blecon_nfc_t* blecon_zephyr_nfc_init(void) {
 
 void blecon_zephyr_nfc_setup(struct blecon_nfc_t* nfc) {
     int ret = nfc_t2t_setup(nfc_callback, NULL);
-    if(ret) {
+    if( ret ) {
         blecon_fatal_error();
     }
 }
@@ -64,34 +64,33 @@ void blecon_zephyr_nfc_set_message(struct blecon_nfc_t* nfc, const uint8_t* nfc_
     struct blecon_zephyr_nfc_t* zephyr_nfc = (struct blecon_zephyr_nfc_t*) nfc;
 
     bool nfc_active = zephyr_nfc->nfc_active;
-    if(nfc_active) {
+    if( nfc_active ) {
         blecon_zephyr_nfc_stop(nfc);
     }
 
     // For now only support URIs starting with https://
-    if((nfc_data_sz < strlen(URI_PREFIX)) 
-        || !!memcmp(nfc_data, URI_PREFIX, strlen(URI_PREFIX))) {
+    if( (nfc_data_sz < strlen(URI_PREFIX))
+        || !!memcmp(nfc_data, URI_PREFIX, strlen(URI_PREFIX)) ) {
         blecon_fatal_error();
     }
 
     nfc_data += strlen(URI_PREFIX);
     nfc_data_sz -= strlen(URI_PREFIX);
-    
+
     // Encode message
     uint32_t len = sizeof(zephyr_nfc->ndef_buffer);
-    int ret = nfc_ndef_uri_msg_encode(NFC_URI_HTTPS, nfc_data, nfc_data_sz,
-        zephyr_nfc->ndef_buffer, &len);
-    if(ret) {
+    int ret = nfc_ndef_uri_msg_encode(NFC_URI_HTTPS, nfc_data, nfc_data_sz, zephyr_nfc->ndef_buffer, &len);
+    if( ret ) {
         blecon_fatal_error();
     }
 
     // Set payload
     ret = nfc_t2t_payload_set(zephyr_nfc->ndef_buffer, len);
-    if(ret) {
+    if( ret ) {
         blecon_fatal_error();
     }
 
-    if(nfc_active) {
+    if( nfc_active ) {
         blecon_zephyr_nfc_start(nfc);
     }
 }
@@ -100,7 +99,7 @@ void blecon_zephyr_nfc_start(struct blecon_nfc_t* nfc) {
     struct blecon_zephyr_nfc_t* zephyr_nfc = (struct blecon_zephyr_nfc_t*) nfc;
 
     int ret = nfc_t2t_emulation_start();
-    if(ret) {
+    if( ret ) {
         blecon_fatal_error();
     }
 
@@ -111,7 +110,7 @@ void blecon_zephyr_nfc_stop(struct blecon_nfc_t* nfc) {
     struct blecon_zephyr_nfc_t* zephyr_nfc = (struct blecon_zephyr_nfc_t*) nfc;
 
     int ret = nfc_t2t_emulation_stop();
-    if(ret) {
+    if( ret ) {
         blecon_fatal_error();
     }
 
@@ -131,7 +130,7 @@ struct blecon_nfc_t* blecon_zephyr_nfc_init(void) {
     };
 
     struct blecon_nfc_t* nfc = BLECON_ALLOC(sizeof(struct blecon_nfc_t));
-    if(nfc == NULL) {
+    if( nfc == NULL ) {
         blecon_fatal_error();
     }
 

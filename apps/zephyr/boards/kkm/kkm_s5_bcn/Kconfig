@@ -1,0 +1,5 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+
+
+# No board-specific options: DC/DC regulator mode is configured in devicetree (&reg1).

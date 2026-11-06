@@ -1,0 +1,50 @@
+/*
+ * Copyright (c) 2024 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&button0 {
+    gpios = <&gpio1 9 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+};
+
+/delete-node/ &fm25w16;
+
+&spi00 {
+	fm25w04: fm25w04@0 {
+		compatible = "jedec,spi-nor";
+		status = "okay";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		jedec-id = [a1 28 13];
+		reset-gpios = <&gpio2 0 GPIO_ACTIVE_LOW>;
+		sfdp-bfp = [
+			e5 20 f1 ff  ff ff ff 03  44 eb 08 6b  08 3b 80 bb
+			fe ff ff ff  ff ff 00 00  ff ff 08 eb  0c 20 0f 52
+			10 d8 00 00  ff ff ff ff  ff ff ff ff  ff ff ff ff
+			ff ff ff ff  ff ff ff ff  ff ff ff ff  ff ff ff ff
+		];
+		size = <524288>;
+		has-dpd;
+		t-enter-dpd = <5000>;
+		t-exit-dpd = <5000>;
+	};
+};
+
+&pinctrl {
+    /omit-if-no-ref/ i2c20_default: i2c20_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 1, 4)>,
+				<NRF_PSEL(TWIM_SCL, 1, 5)>;
+			bias-pull-up;
+		};
+	};
+
+	/omit-if-no-ref/ i2c20_sleep: i2c20_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 1, 4)>,
+				<NRF_PSEL(TWIM_SCL, 1, 5)>;
+			low-power-enable;
+		};
+	};
+};

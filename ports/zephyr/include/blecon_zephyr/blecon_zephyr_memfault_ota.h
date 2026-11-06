@@ -17,17 +17,16 @@ extern "C" {
 #include "blecon/blecon_memfault_ota_client.h"
 #include "blecon/blecon_download_client.h"
 
-
 struct blecon_zephyr_memfault_ota_t;
 
 enum blecon_zephyr_memfault_ota_status_t {
-    blecon_zephyr_memfault_ota_status_idle,                                            /**< Not downloading an update */
-    blecon_zephyr_memfault_ota_status_downloading,                                     /**< Currently downloading an update */
-    blecon_zephyr_memfault_ota_status_no_update_available,                             /**< No update available */
-    blecon_zephyr_memfault_ota_status_error_download_failed,                           /**< Error: Download failed */
-    blecon_zephyr_memfault_ota_status_error_bad_url,                                   /**< Error: Bad URL */
-    blecon_zephyr_memfault_ota_status_error_during_dfu,                                /**< Error: Could not write to flash during DFU */
-    blecon_zephyr_memfault_ota_status_error_installation_attempted_during_download,    /**< Error: Installation attempted during download */
+    blecon_zephyr_memfault_ota_status_idle,                                         /**< Not downloading an update */
+    blecon_zephyr_memfault_ota_status_downloading,                                  /**< Currently downloading an update */
+    blecon_zephyr_memfault_ota_status_no_update_available,                          /**< No update available */
+    blecon_zephyr_memfault_ota_status_error_download_failed,                        /**< Error: Download failed */
+    blecon_zephyr_memfault_ota_status_error_bad_url,                                /**< Error: Bad URL */
+    blecon_zephyr_memfault_ota_status_error_during_dfu,                             /**< Error: Could not write to flash during DFU */
+    blecon_zephyr_memfault_ota_status_error_installation_attempted_during_download, /**< Error: Installation attempted during download */
 };
 
 /**
@@ -40,7 +39,7 @@ struct blecon_zephyr_memfault_ota_callbacks_t {
      * @brief Called when an OTA download is initiated
      * @param ota the OTA instance
      */
-    void (*on_ota_start)(struct blecon_zephyr_memfault_ota_t* ota, const char *ota_url);
+    void (*on_ota_start)(struct blecon_zephyr_memfault_ota_t* ota, const char* ota_url);
 
     /**
      * @brief Called when an OTA download has completed successfully
@@ -80,7 +79,7 @@ struct blecon_zephyr_memfault_ota_t {
     const char* request_namespace;
 
     /** Callbacks for OTA operations */
-    const struct blecon_zephyr_memfault_ota_callbacks_t *callbacks;
+    const struct blecon_zephyr_memfault_ota_callbacks_t* callbacks;
 
     /** User data to be passed to callbacks */
     void* user_data;
@@ -96,6 +95,10 @@ struct blecon_zephyr_memfault_ota_t {
 
     /** Flag indicating if an update is currently downloading */
     bool downloading_update;
+
+    /** Heap-allocated OTA URL owned for the lifetime of the in-flight download.
+        Released with blecon_memfault_ota_client_free_url() on completion or error. */
+    char* ota_url;
 
     /** FIFO queue for DFU target operations */
     struct k_fifo dfu_target_ops;
@@ -122,7 +125,7 @@ struct blecon_zephyr_memfault_ota_t {
  * @param callbacks a pointer to the callback functions for OTA operations
  * @param user_data user data to pass to the callbacks
  */
-void blecon_zephyr_memfault_ota_init(struct blecon_zephyr_memfault_ota_t* ota, struct blecon_event_loop_t* event_loop, struct blecon_t* blecon, const char* request_namespace, const struct blecon_zephyr_memfault_ota_callbacks_t *callbacks, void* user_data);
+void blecon_zephyr_memfault_ota_init(struct blecon_zephyr_memfault_ota_t* ota, struct blecon_event_loop_t* event_loop, struct blecon_t* blecon, const char* request_namespace, const struct blecon_zephyr_memfault_ota_callbacks_t* callbacks, void* user_data);
 
 /**
  * @brief Check for available OTA updates
@@ -161,7 +164,7 @@ void blecon_zephyr_memfault_ota_confirm_current_image(struct blecon_zephyr_memfa
  * @param ota the OTA instance
  * @return a pointer to the user data
  */
-void *blecon_zephyr_memfault_ota_get_user_data(struct blecon_zephyr_memfault_ota_t* ota);
+void* blecon_zephyr_memfault_ota_get_user_data(struct blecon_zephyr_memfault_ota_t* ota);
 
 /**
  * @brief Get the current OTA status
@@ -177,7 +180,7 @@ enum blecon_zephyr_memfault_ota_status_t blecon_zephyr_memfault_ota_get_status(s
  * @param status the OTA status
  * @return a string representation of the OTA status
  */
-const char *blecon_zephyr_memfault_ota_status_to_string(enum blecon_zephyr_memfault_ota_status_t status);
+const char* blecon_zephyr_memfault_ota_status_to_string(enum blecon_zephyr_memfault_ota_status_t status);
 
 #ifdef __cplusplus
 }

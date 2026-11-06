@@ -33,6 +33,7 @@ struct blecon_timer_t;
 struct blecon_bluetooth_t;
 struct blecon_crypto_t;
 struct blecon_nvm_t;
+struct blecon_otp_t;
 struct blecon_nfc_t;
 struct blecon_ext_modem_transport_t;
 
@@ -43,13 +44,13 @@ struct blecon_modem_t;
  * @brief Scan type enumeration for blecon_scan_start()
  */
 enum blecon_scan_type_t {
-    blecon_scan_type_passive,   /**< Passive scanning - listen only */
-    blecon_scan_type_active     /**< Active scanning - send scan requests */
+    blecon_scan_type_passive, /**< Passive scanning - listen only */
+    blecon_scan_type_active   /**< Active scanning - send scan requests */
 };
 
 /**
  * @brief Callbacks structure to populate by user
- * 
+ *
  */
 struct blecon_callbacks_t {
     /**
@@ -89,17 +90,19 @@ struct blecon_callbacks_t {
     void (*on_scan_complete)(struct blecon_t* blecon);
 };
 
-/** 
+/**
  * @brief Create new internal modem instance
- * 
+ *
  * @param event_loop a platform-specific event loop instance
  * @param timer a platform-specific timer instance
  * @param bluetooth a platform-specific bluetooth instance
  * @param crypto a platform-specific crypto instance
  * @param nvm a platform-specific nvm instance
+ * @param otp a platform-specific otp instance, or NULL if not available
  * @param nfc a platform-specific nfc instance
  * @param scan_buffer_size the size of the scan buffer
  * @param allocator a function to allocate memory
+ * @param allocator_user_data user data to pass to the allocator
  * @return a pointer to a struct blecon_modem_t instance
  * */
 struct blecon_modem_t* blecon_int_modem_create(
@@ -108,45 +111,53 @@ struct blecon_modem_t* blecon_int_modem_create(
     struct blecon_bluetooth_t* bluetooth,
     struct blecon_crypto_t* crypto,
     struct blecon_nvm_t* nvm,
+    struct blecon_otp_t* otp,
     struct blecon_nfc_t* nfc,
     size_t scan_buffer_size,
-    void* (*allocator)(size_t)
+    void* (*allocator)(size_t size, void* user_data),
+    void* allocator_user_data
 );
 
-/** 
+/**
  * @brief Destroy internal modem instance
- * 
+ *
  * @param modem a pointer to a struct blecon_modem_t instance created by blecon_int_modem_create()
  * @param deallocator a function to deallocate memory or NULL
+ * @param deallocator_user_data user data to pass to the deallocator
  * */
 void blecon_int_modem_destroy(
     struct blecon_modem_t* modem,
-    void (*deallocator)(void*)
+    void (*deallocator)(void* ptr, void* user_data),
+    void* deallocator_user_data
 );
 
-/** 
+/**
  * @brief Create new external modem instance
- * 
+ *
  * @param event_loop a platform-specific event loop instance
  * @param transport a platform-specific transport instance
  * @param allocator a function to allocate memory
+ * @param allocator_user_data user data to pass to the allocator
  * @return a pointer to a struct blecon_modem_t instance
  * */
 struct blecon_modem_t* blecon_ext_modem_create(
     struct blecon_event_loop_t* event_loop,
     struct blecon_ext_modem_transport_t* transport,
-    void* (*allocator)(size_t)
+    void* (*allocator)(size_t size, void* user_data),
+    void* allocator_user_data
 );
 
-/** 
+/**
  * @brief Destroy external modem instance
- * 
+ *
  * @param modem a pointer to a struct blecon_modem_t instance created by blecon_ext_modem_create()
  * @param deallocator a function to deallocate memory or NULL
+ * @param deallocator_user_data user data to pass to the deallocator
  * */
 void blecon_ext_modem_destroy(
     struct blecon_modem_t* modem,
-    void (*deallocator)(void*)
+    void (*deallocator)(void* ptr, void* user_data),
+    void* deallocator_user_data
 );
 
 /**
@@ -157,8 +168,19 @@ void blecon_ext_modem_destroy(
 void blecon_init(struct blecon_t* blecon, struct blecon_modem_t* modem);
 
 /**
+ * @brief Clean-up Blecon
+ *
+ * Releases what blecon_init() set up and detaches the instance from its modem, which
+ * the application owns and destroys after this call. Requests still submitted and
+ * clients still registered on the request processor must be cleaned up before.
+ *
+ * @param blecon the blecon instance to clean-up
+ */
+void blecon_cleanup(struct blecon_t* blecon);
+
+/**
  * @brief Set-up Blecon
- * 
+ *
  * @param blecon the blecon instance to set-up
  * @return true on success, or false on failure
  */
@@ -166,7 +188,7 @@ bool blecon_setup(struct blecon_t* blecon);
 
 /**
  * @brief Set callbacks
- * 
+ *
  * @param blecon the blecon instance
  * @param callbacks a struct blecon_modem_callbacks_t structure containing the user's callbacks
  * @param user_data user data to pass to the callbacks
@@ -175,7 +197,7 @@ void blecon_set_callbacks(struct blecon_t* blecon, const struct blecon_callbacks
 
 /**
  * @brief Get information about the modem
- * 
+ *
  * @param blecon the blecon instance
  * @param info a pointer to a struct blecon_modem_info_t structure which is populated on success
  */
@@ -183,7 +205,7 @@ void blecon_get_info(struct blecon_t* blecon, struct blecon_modem_info_t* info);
 
 /**
  * @brief Set application-related data
- * 
+ *
  * @param blecon the blecon instance
  * @param application_model_id the device's specific model id encoded as a UUID (16 bytes long)
  * @param application_schema_version the device's schema version
@@ -193,10 +215,10 @@ bool blecon_set_application_data(struct blecon_t* blecon, const uint8_t* applica
 
 /**
  * @brief Set advertising mode
- * 
+ *
  * This function configures the advertising mode, which affects the power consumption
  * and connection latency when advertising or attempting to connect.
- * 
+ *
  * @param blecon the blecon instance
  * @param mode the advertising mode (high_performance, balanced, or ultra_low_power)
  * @return true on success, or false on failure
@@ -205,7 +227,7 @@ bool blecon_set_advertising_mode(struct blecon_t* blecon, enum blecon_advertisin
 
 /**
  * @brief Announce the device ID to surrounding hotspots
- * 
+ *
  * @param blecon the blecon instance
  * @return true on success, or false on failure
  */
@@ -213,7 +235,7 @@ bool blecon_announce(struct blecon_t* blecon);
 
 /**
  * @brief Initiate a connection to the Blecon infrastructure
- * 
+ *
  * @param blecon the blecon instance
  * @return true on success, or false on failure
  */
@@ -221,7 +243,7 @@ bool blecon_connection_initiate(struct blecon_t* blecon);
 
 /**
  * @brief Terminate the current connection, or cancel the connection attempt
- * 
+ *
  * @param blecon the blecon instance
  * @return true on success, or false on failure
  */
@@ -229,7 +251,7 @@ bool blecon_connection_terminate(struct blecon_t* blecon);
 
 /**
  * @brief Check if a connection is established
- * 
+ *
  * @param blecon the blecon instance
  * @return true if connected, or false if not
  */
@@ -237,17 +259,17 @@ bool blecon_is_connected(struct blecon_t* blecon);
 
 /**
  * @brief Get the device's ID in URL form
- * 
+ *
  * @param blecon the blecon instance
  * @param url a char array where to store the url (0-terminated)
  * @param max_sz the maximum size of the array (including space for 0 terminator)
- * @return true on success, or false on failure
+ * @return true on success, or false on failure (including when the device is not yet provisioned)
  */
 bool blecon_get_url(struct blecon_t* blecon, char* url, size_t max_sz);
 
 /**
  * @brief Get the device's ID in UUID form
- * 
+ *
  * @param blecon the blecon instance
  * @param uuid a 16-byte array where to store the uuid
  * @return true on success, or false on failure
@@ -267,7 +289,7 @@ bool blecon_get_time(struct blecon_t* blecon, bool* time_valid, uint64_t* utc_ti
 
 /**
  * @brief Perform a ping to the Blecon infrastructure
- * 
+ *
  * @param blecon the blecon instance
  * @param timeout_ms the timeout in milliseconds
  * @return true on success, or false on failure
@@ -276,7 +298,7 @@ bool blecon_ping_perform(struct blecon_t* blecon, uint32_t timeout_ms);
 
 /**
  * @brief Cancel a ping to the Blecon infrastructure
- * 
+ *
  * @param blecon the blecon instance
  * @return true on success, or false on failure
  */
@@ -284,7 +306,7 @@ bool blecon_ping_cancel(struct blecon_t* blecon);
 
 /**
  * @brief Get latency information from the last ping
- * 
+ *
  * @param blecon the blecon instance
  * @param latency_available a pointer to a bool which is set to true if the latency is available
  * @param connection_latency_ms a pointer to a uint32_t where the connection latency is stored (milliseconds)
@@ -295,21 +317,21 @@ bool blecon_ping_get_latency(struct blecon_t* blecon, bool* latency_available, u
 
 /**
  * @brief Start a peer scanning session
- * 
+ *
  * This function starts a scanning session to discover nearby Blecon and Bluetooth devices.
  * The scan can be configured to report other Blecon devices (peers),
  * raw advertising data from all devices, or both.
- * 
+ *
  * When peer_scan is enabled, the function will report devices that are identified
  * as Blecon peers through the on_scan_report callback.
- * 
+ *
  * When raw_scan is enabled, the function will report raw advertising data from
  * other Bluetooth devices. The scan_type parameter controls whether to send
  * scan requests to advertisers (active scanning) or just listen passively.
- * 
+ *
  * The scan will run for the specified duration and results will be available
  * through the blecon_scan_get_data() function after completion.
- * 
+ *
  * @param blecon the blecon instance
  * @param peer_scan true to report peer devices
  * @param raw_scan true to report raw advertising data
@@ -321,7 +343,7 @@ bool blecon_scan_start(struct blecon_t* blecon, bool peer_scan, bool raw_scan, e
 
 /**
  * @brief Stop the current peer scanning session
- * 
+ *
  * @param blecon the blecon instance
  * @return true on success, or false on failure
  */
@@ -329,23 +351,20 @@ bool blecon_scan_stop(struct blecon_t* blecon);
 
 /**
  * @brief Get the data from the last peer scan
- * 
+ *
  * @param blecon the blecon instance
- * 
+ *
  * @param peer_scan_report_iterator a function to call for each peer device report; if NULL, no peer device reports are returned
  * @param raw_scan_report_iterator a function to call for each raw advertising data report; if NULL, no raw advertising data reports are returned
  * @param overflow a pointer to a bool which is set to true if the scan data buffer overflowed
  * @param user_data user data to pass to the report iterator callbacks
  * @return true on success, or false on failure
  */
-bool blecon_scan_get_data(struct blecon_t* blecon, 
-    void (*peer_scan_report_iterator)(const struct blecon_modem_peer_scan_report_t* report, void* user_data), 
-    void (*raw_scan_report_iterator)(const struct blecon_modem_raw_scan_report_t* report, void* user_data),
-    bool* overflow, void* user_data);
+bool blecon_scan_get_data(struct blecon_t* blecon, void (*peer_scan_report_iterator)(const struct blecon_modem_peer_scan_report_t* report, void* user_data), void (*raw_scan_report_iterator)(const struct blecon_modem_raw_scan_report_t* report, void* user_data), bool* overflow, void* user_data);
 
 /**
  * @brief Submit a request for processing
- * 
+ *
  * @param blecon the blecon instance
  * @param request the request to submit
  */
@@ -353,7 +372,7 @@ void blecon_submit_request(struct blecon_t* blecon, struct blecon_request_t* req
 
 /**
  * @brief Get a request processor
- * 
+ *
  * @param blecon the blecon instance
  * @return a pointer to a struct blecon_request_processor_t instance
  */

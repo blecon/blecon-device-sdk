@@ -31,8 +31,14 @@ set(CMAKE_CXX_COMPILER "arm-none-eabi-g++")
 set(CFLAGS_COMMON "-ffunction-sections -fdata-sections -fno-strict-aliasing -fno-builtin --short-enums -Wall -Wno-attributes -Wno-format")
 set(ASMFLAGS_COMMON "")
 
+option(BLECON_NRF5_NANO "Use newlib-nano" OFF)
+
 # Do not use --specs=nano.specs as we need full printf support
-set(LDFLAGS_COMMON "-Wl,--gc-sections -lc -lnosys -lm")
+if(BLECON_NRF5_NANO)
+    set(LDFLAGS_COMMON "-Wl,--gc-sections --specs=nano.specs -lc -lnosys -lm")
+else()
+    set(LDFLAGS_COMMON "-Wl,--gc-sections -lc -lnosys -lm")
+endif()
 set(FLAGS_ARCH "${FLAGS_ARCH_${CPU}}")
 
 set(CMAKE_C_FLAGS_INIT "${FLAGS_ARCH} ${CFLAGS_COMMON}" CACHE STRING "" FORCE)

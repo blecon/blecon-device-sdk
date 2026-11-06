@@ -9,16 +9,11 @@
 #define UART_TRANSPORT_DEFAULT_NEXT_CHARS_TIMEOUT_MS 10u
 
 static void blecon_zephyr_ext_modem_uart_transport_setup(struct blecon_ext_modem_transport_t* transport);
-static bool blecon_zephyr_ext_modem_uart_transport_exchange_frames(struct blecon_ext_modem_transport_t* transport, 
-        struct blecon_ext_modem_transport_tx_frame_t* tx_frame,
-        struct blecon_ext_modem_transport_rx_frame_t* rx_frame,
-        bool* event
-    );
+static bool blecon_zephyr_ext_modem_uart_transport_exchange_frames(struct blecon_ext_modem_transport_t* transport, struct blecon_ext_modem_transport_tx_frame_t* tx_frame, struct blecon_ext_modem_transport_rx_frame_t* rx_frame, bool* event);
 static bool blecon_zephyr_ext_modem_uart_transport_writer_write(struct blecon_ext_modem_transport_writer_t* writer, const uint8_t* data, size_t sz);
 static bool blecon_zephyr_ext_modem_uart_transport_reader_read(struct blecon_ext_modem_transport_reader_t* reader, uint8_t* data, size_t sz);
 
-static bool blecon_zephyr_ext_modem_uart_transport_read_bytes(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, 
-    uint8_t* buf, size_t* sz, uint32_t timeout_ms, bool* done);
+static bool blecon_zephyr_ext_modem_uart_transport_read_bytes(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, uint8_t* buf, size_t* sz, uint32_t timeout_ms, bool* done);
 static bool blecon_zephyr_ext_modem_uart_transport_read_char(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, uint32_t timeout_ms, char* c);
 
 static bool blecon_zephyr_ext_modem_uart_transport_write_bytes(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, const uint8_t* data, size_t sz);
@@ -29,8 +24,7 @@ static void blecon_zephyr_ext_modem_uart_transport_rx_event(struct blecon_event_
 
 static void blecon_zephyr_ext_modem_uart_transport_interrupt_handler(const struct device* dev, void* user_data);
 
-void blecon_zephyr_ext_modem_uart_transport_init(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport,
-    struct blecon_event_loop_t* event_loop, const struct device* uart_device) {
+void blecon_zephyr_ext_modem_uart_transport_init(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, struct blecon_event_loop_t* event_loop, const struct device* uart_device) {
     const static struct blecon_ext_modem_transport_fn_t blecon_zephyr_ext_modem_uart_transport_functions = {
         .setup = blecon_zephyr_ext_modem_uart_transport_setup,
         .exchange_frames = blecon_zephyr_ext_modem_uart_transport_exchange_frames
@@ -52,7 +46,7 @@ void blecon_zephyr_ext_modem_uart_transport_init(struct blecon_zephyr_ext_modem_
 
     // Store UART device
     ext_modem_uart_transport->uart_device = uart_device;
-    
+
     // Initialise semaphore
     ext_modem_uart_transport->rx_error = false;
     k_sem_init(&ext_modem_uart_transport->rx_sem, 0, 1);
@@ -70,32 +64,28 @@ void blecon_zephyr_ext_modem_uart_transport_setup(struct blecon_ext_modem_transp
     uart_irq_rx_enable(ext_modem_uart_transport->uart_device);
 }
 
-bool blecon_zephyr_ext_modem_uart_transport_exchange_frames(struct blecon_ext_modem_transport_t* transport, 
-        struct blecon_ext_modem_transport_tx_frame_t* tx_frame,
-        struct blecon_ext_modem_transport_rx_frame_t* rx_frame,
-        bool* event
-    ) {
+bool blecon_zephyr_ext_modem_uart_transport_exchange_frames(struct blecon_ext_modem_transport_t* transport, struct blecon_ext_modem_transport_tx_frame_t* tx_frame, struct blecon_ext_modem_transport_rx_frame_t* rx_frame, bool* event) {
     struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport = (struct blecon_zephyr_ext_modem_uart_transport_t*) transport;
     size_t tx_sz = blecon_ext_modem_transport_tx_frame_get_size(tx_frame);
     uint8_t tx_frame_header[] = { 0x01, tx_sz & 0xff, (tx_sz >> 8u) & 0xff };
 
     // Write frame header
     bool success = blecon_zephyr_ext_modem_uart_transport_write_bytes(ext_modem_uart_transport, tx_frame_header, sizeof(tx_frame_header));
-    if(!success) {
+    if( !success ) {
         return false;
     }
 
     // Write rest of frame
     blecon_ext_modem_transport_writer_set_remaining_sz(&ext_modem_uart_transport->writer, tx_sz);
     success = blecon_ext_modem_transport_tx_frame_write(tx_frame, &ext_modem_uart_transport->writer);
-    if(!success) {
+    if( !success ) {
         return false;
     }
     blecon_ext_modem_transport_writer_assert_done(&ext_modem_uart_transport->writer);
-    
+
     // Write frame done
     success = blecon_zephyr_ext_modem_uart_transport_write_done(ext_modem_uart_transport);
-    if(!success) {
+    if( !success ) {
         return false;
     }
 
@@ -104,42 +94,42 @@ bool blecon_zephyr_ext_modem_uart_transport_exchange_frames(struct blecon_ext_mo
     ext_modem_uart_transport->rx_timeout = false;
 
     // Read frame header
-    uint8_t rx_frame_header[3] = {0};
+    uint8_t rx_frame_header[3] = { 0 };
     do {
         size_t rx_read_sz = sizeof(rx_frame_header);
         bool rx_done = false;
         success = blecon_zephyr_ext_modem_uart_transport_read_bytes(ext_modem_uart_transport, rx_frame_header, &rx_read_sz, UART_TRANSPORT_DEFAULT_FIRST_CHAR_TIMEOUT_MS, &rx_done);
-        if(!success) {
+        if( !success ) {
             return false;
         }
 
-        if(rx_read_sz < 1) {
+        if( rx_read_sz < 1 ) {
             return false;
         }
 
-        if(rx_frame_header[0] & 0x02) {
+        if( rx_frame_header[0] & 0x02 ) {
             *event = true;
         }
 
         if( !(rx_frame_header[0] & 0x01) ) {
-            if(rx_done) {
+            if( rx_done ) {
                 continue; // Wait for next frame
             } else {
                 return false; // Not a valid frame
             }
         }
 
-        if(rx_read_sz < 3) {
+        if( rx_read_sz < 3 ) {
             return false;
         }
 
         break;
-    } while(true);
+    } while( true );
 
-    size_t rx_sz = rx_frame_header[1] | ((size_t)rx_frame_header[2] << 8u);
+    size_t rx_sz = rx_frame_header[1] | ((size_t) rx_frame_header[2] << 8u);
 
     bool rx_error = false;
-    if(!blecon_ext_modem_transport_rx_frame_set_size(rx_frame, rx_sz)) {
+    if( !blecon_ext_modem_transport_rx_frame_set_size(rx_frame, rx_sz) ) {
         rx_error = true;
         goto done;
     }
@@ -147,24 +137,24 @@ bool blecon_zephyr_ext_modem_uart_transport_exchange_frames(struct blecon_ext_mo
     // Read rest of the frame
     blecon_ext_modem_transport_reader_set_remaining_sz(&ext_modem_uart_transport->reader, rx_sz);
     success = blecon_ext_modem_transport_rx_frame_read(rx_frame, &ext_modem_uart_transport->reader);
-    if(!success) {
+    if( !success ) {
         rx_error = true;
         goto done;
     }
     blecon_ext_modem_transport_reader_assert_done(&ext_modem_uart_transport->reader);
 
 done:
-    if(!ext_modem_uart_transport->rx_frame_done && !ext_modem_uart_transport->rx_timeout) {
+    if( !ext_modem_uart_transport->rx_frame_done && !ext_modem_uart_transport->rx_timeout ) {
         // Expect frame to be done (and discard any extra characters)
-        uint8_t buf[16] = {0};
+        uint8_t buf[16] = { 0 };
         bool rx_done = false;
         do {
             size_t read_sz = sizeof(buf);
             bool success = blecon_zephyr_ext_modem_uart_transport_read_bytes(ext_modem_uart_transport, buf, &read_sz, UART_TRANSPORT_DEFAULT_NEXT_CHARS_TIMEOUT_MS, &rx_done);
-            if(!success) {
+            if( !success ) {
                 return false;
             }
-        } while(!rx_done);
+        } while( !rx_done );
     }
 
     return !rx_error;
@@ -172,19 +162,19 @@ done:
 
 bool blecon_zephyr_ext_modem_uart_transport_writer_write(struct blecon_ext_modem_transport_writer_t* writer, const uint8_t* data, size_t sz) {
     // Retrieve transport from writer
-    struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport = (struct blecon_zephyr_ext_modem_uart_transport_t*) ((char*)writer - offsetof(struct blecon_zephyr_ext_modem_uart_transport_t, writer));
+    struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport = (struct blecon_zephyr_ext_modem_uart_transport_t*) ((char*) writer - offsetof(struct blecon_zephyr_ext_modem_uart_transport_t, writer));
 
     return blecon_zephyr_ext_modem_uart_transport_write_bytes(ext_modem_uart_transport, data, sz);
 }
 
 bool blecon_zephyr_ext_modem_uart_transport_reader_read(struct blecon_ext_modem_transport_reader_t* reader, uint8_t* data, size_t sz) {
     // Retrieve transport from reader
-    struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport = (struct blecon_zephyr_ext_modem_uart_transport_t*) ((char*)reader - offsetof(struct blecon_zephyr_ext_modem_uart_transport_t, reader));
+    struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport = (struct blecon_zephyr_ext_modem_uart_transport_t*) ((char*) reader - offsetof(struct blecon_zephyr_ext_modem_uart_transport_t, reader));
 
     size_t read_sz = sz;
     bool done = false;
     bool success = blecon_zephyr_ext_modem_uart_transport_read_bytes(ext_modem_uart_transport, data, &read_sz, UART_TRANSPORT_DEFAULT_NEXT_CHARS_TIMEOUT_MS, &done);
-    if(!success) {
+    if( !success ) {
         // Timeout
         ext_modem_uart_transport->rx_timeout = true;
         return false;
@@ -193,7 +183,7 @@ bool blecon_zephyr_ext_modem_uart_transport_reader_read(struct blecon_ext_modem_
     // Update RX frame done flag
     ext_modem_uart_transport->rx_frame_done = done;
 
-    if(read_sz != sz) {
+    if( read_sz != sz ) {
         return false;
     }
 
@@ -205,9 +195,7 @@ bool blecon_zephyr_ext_modem_uart_transport_reader_read(struct blecon_ext_modem_
     return true;
 }
 
-bool blecon_zephyr_ext_modem_uart_transport_read_bytes(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, 
-    uint8_t* buf, size_t* sz, uint32_t timeout_ms, bool* done) {
-
+bool blecon_zephyr_ext_modem_uart_transport_read_bytes(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, uint8_t* buf, size_t* sz, uint32_t timeout_ms, bool* done) {
     bool first_char = true;
     bool wait_for_msb = true; // MSB first, LSB then
     size_t read_sz = 0;
@@ -222,39 +210,39 @@ bool blecon_zephyr_ext_modem_uart_transport_read_bytes(struct blecon_zephyr_ext_
         first_char = false;
         char c = 0;
         bool success = blecon_zephyr_ext_modem_uart_transport_read_char(ext_modem_uart_transport, timeout, &c);
-        if(!success) {
+        if( !success ) {
             return false;
         }
 
         if( ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) ) {
             // Retrieve half-byte value from character
             uint8_t hb = 0;
-            if (c >= '0' && c <= '9' ) {
+            if( c >= '0' && c <= '9' ) {
                 hb = 0x0 + (c - '0');
-            } else if (c >= 'a' && c <= 'f') {
+            } else if( c >= 'a' && c <= 'f' ) {
                 hb = 0xA + (c - 'a');
             } else /* (c >= 'A' && c <= 'F') */ {
                 hb = 0xA + (c - 'A');
             }
 
             // Ignore character if buffer set to NULL
-            if(wait_for_msb) {
-                if(buf != NULL) {
+            if( wait_for_msb ) {
+                if( buf != NULL ) {
                     buf[read_sz] = (hb << 4u);
                 }
             } else {
-                if(buf != NULL) {
+                if( buf != NULL ) {
                     buf[read_sz] |= hb;
                 }
                 read_sz++;
             }
             wait_for_msb = !wait_for_msb;
-        } else if(c == '\n') {
+        } else if( c == '\n' ) {
             // End of frame
             *done = true;
             break;
         }
-    } while(true);
+    } while( true );
 
     // Update size
     *sz = read_sz;
@@ -288,13 +276,13 @@ bool blecon_zephyr_ext_modem_uart_transport_read_char(struct blecon_zephyr_ext_m
 }
 
 bool blecon_zephyr_ext_modem_uart_transport_write_bytes(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport, const uint8_t* data, size_t sz) {
-    for(size_t write_pos = 0; write_pos < sz; write_pos++) {
-        for(size_t half_byte_pos = 0; half_byte_pos <= 1; ) { 
+    for( size_t write_pos = 0; write_pos < sz; write_pos++ ) {
+        for( size_t half_byte_pos = 0; half_byte_pos <= 1; ) {
             static const uint8_t digit2char[] = "0123456789ABCDEF";
             char c = digit2char[(data[write_pos] >> (4u * (1u - half_byte_pos))) & 0xF];
-            
+
             bool success = blecon_zephyr_ext_modem_uart_transport_write_char(ext_modem_uart_transport, c);
-            if(!success) {
+            if( !success ) {
                 return false;
             }
 
@@ -308,7 +296,7 @@ bool blecon_zephyr_ext_modem_uart_transport_write_bytes(struct blecon_zephyr_ext
 bool blecon_zephyr_ext_modem_uart_transport_write_done(struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport) {
     // Send line termination
     bool success = blecon_zephyr_ext_modem_uart_transport_write_char(ext_modem_uart_transport, '\n');
-    if(!success) {
+    if( !success ) {
         return false;
     }
 
@@ -325,15 +313,15 @@ void blecon_zephyr_ext_modem_uart_transport_rx_event(struct blecon_event_t* even
     struct blecon_zephyr_ext_modem_uart_transport_t* ext_modem_uart_transport = (struct blecon_zephyr_ext_modem_uart_transport_t*) user_data;
 
     // Check that it's an event
-    uint8_t buf[16] = {0};
+    uint8_t buf[16] = { 0 };
     size_t read_sz = 1;
     bool rx_done = false;
     bool success = blecon_zephyr_ext_modem_uart_transport_read_bytes(ext_modem_uart_transport, buf, &read_sz, 0, &rx_done);
-    if(!success) {
+    if( !success ) {
         goto clear;
     }
 
-    if((read_sz == 1) && (buf[0] & 0x02)) {
+    if( (read_sz == 1) && (buf[0] & 0x02) ) {
         blecon_ext_modem_transport_signal(&ext_modem_uart_transport->ext_modem_transport);
     }
 
@@ -341,10 +329,10 @@ void blecon_zephyr_ext_modem_uart_transport_rx_event(struct blecon_event_t* even
     do {
         size_t read_sz = sizeof(buf);
         bool success = blecon_zephyr_ext_modem_uart_transport_read_bytes(ext_modem_uart_transport, buf, &read_sz, UART_TRANSPORT_DEFAULT_NEXT_CHARS_TIMEOUT_MS, &rx_done);
-        if(!success) {
+        if( !success ) {
             return;
         }
-    } while(!rx_done);
+    } while( !rx_done );
 clear:
 }
 
@@ -353,7 +341,7 @@ void blecon_zephyr_ext_modem_uart_transport_interrupt_handler(const struct devic
     bool signal_event = false;
     while( uart_irq_update(dev) && uart_irq_is_pending(dev) ) {
         if( uart_irq_rx_ready(dev) ) {
-            while(true) {
+            while( true ) {
                 // Allocate space in the ring buffer
                 uint8_t* rx_buf = NULL;
                 uint32_t rx_sz = ring_buf_put_claim(&ext_modem_uart_transport->rx_fifo, &rx_buf, sizeof(ext_modem_uart_transport->rx_fifo_buf));
@@ -362,15 +350,16 @@ void blecon_zephyr_ext_modem_uart_transport_interrupt_handler(const struct devic
                     // No space left in ring buffer - discard bytes and set error flag
                     ring_buf_put_finish(&ext_modem_uart_transport->rx_fifo, 0);
 
-                    uint8_t buf[16] = {0};
-                    while( uart_fifo_read(dev, buf, sizeof(buf)) > 0 );
+                    uint8_t buf[16] = { 0 };
+                    while( uart_fifo_read(dev, buf, sizeof(buf)) > 0 )
+                        ;
 
                     // Set error flag
                     ext_modem_uart_transport->rx_error = true;
                     signal_event = true;
                     break;
                 }
-                
+
                 // Read UART FIFO
                 int ret = uart_fifo_read(dev, rx_buf, rx_sz);
                 blecon_assert(ret >= 0);
@@ -378,7 +367,7 @@ void blecon_zephyr_ext_modem_uart_transport_interrupt_handler(const struct devic
                 // Adjust written size in ring buffer
                 rx_sz = ret;
                 ring_buf_put_finish(&ext_modem_uart_transport->rx_fifo, rx_sz);
-                
+
                 if( rx_sz == 0 ) {
                     // Done - got all data from FIFO
                     break;
@@ -389,7 +378,7 @@ void blecon_zephyr_ext_modem_uart_transport_interrupt_handler(const struct devic
         }
     }
 
-    if(!signal_event) {
+    if( !signal_event ) {
         // Nothing happened
         return;
     }

@@ -17,7 +17,12 @@ extern "C" {
     uf, ue, ud, uc, ub, ua, u9, u8, u7, u6, u5, u4, u3, u2, u1, u0
 #define BLECON_UUID_ENDIANNESS_SWAP(uuid) BLECON_UUID_ENDIANNESS_SWAP_2(uuid)
 
-char* blecon_util_append_hex_string(const uint8_t* data, size_t sz, char* output);
+enum blecon_util_endianness_t {
+    blecon_util_endianness_big,    // print bytes in array order (byte[0] first)
+    blecon_util_endianness_little, // print bytes in reverse array order (byte[sz-1] first)
+};
+
+char* blecon_util_append_hex_string(const uint8_t* data, size_t sz, enum blecon_util_endianness_t endianness, char* output);
 char* blecon_util_append_uuid_string(const uint8_t* data, char* output);
 
 #ifdef __cplusplus

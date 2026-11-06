@@ -42,7 +42,7 @@ struct blecon_nfc_t* blecon_nrf5_nfc_init(void) {
 
 #if NORDIC_TARGET_SUPPORTS_NFC
 
-static void nfc_callback(void * p_context, nfc_t2t_event_t event, const uint8_t * p_data, size_t data_length);
+static void nfc_callback(void* p_context, nfc_t2t_event_t event, const uint8_t* p_data, size_t data_length);
 static uint8_t _ndef_buffer[256];
 static bool _nfc_active;
 
@@ -50,7 +50,7 @@ static bool _nfc_active;
 
 void blecon_nrf5_nfc_setup(struct blecon_nfc_t* nfc) {
     uint32_t ret = nfc_t2t_setup(nfc_callback, NULL);
-    if(ret != NRF_SUCCESS) {
+    if( ret != NRF_SUCCESS ) {
         blecon_fatal_error();
     }
 
@@ -59,41 +59,40 @@ void blecon_nrf5_nfc_setup(struct blecon_nfc_t* nfc) {
 
 void blecon_nrf5_nfc_set_message(struct blecon_nfc_t* nfc, const uint8_t* nfc_data, size_t nfc_data_sz) {
     bool nfc_active = _nfc_active;
-    if(nfc_active) {
+    if( nfc_active ) {
         blecon_nrf5_nfc_stop(nfc);
     }
 
     // For now only support URIs starting with https://
-    if((nfc_data_sz < strlen(URI_PREFIX)) 
-        || !!memcmp(nfc_data, URI_PREFIX, strlen(URI_PREFIX))) {
+    if( (nfc_data_sz < strlen(URI_PREFIX))
+        || !!memcmp(nfc_data, URI_PREFIX, strlen(URI_PREFIX)) ) {
         blecon_fatal_error();
     }
 
     nfc_data += strlen(URI_PREFIX);
     nfc_data_sz -= strlen(URI_PREFIX);
-    
+
     // Encode message
     uint32_t len = sizeof(_ndef_buffer);
-    uint32_t ret = nfc_uri_msg_encode(NFC_URI_HTTPS, nfc_data, nfc_data_sz,
-        _ndef_buffer, &len);
-    if(ret != NRF_SUCCESS) {
+    uint32_t ret = nfc_uri_msg_encode(NFC_URI_HTTPS, nfc_data, nfc_data_sz, _ndef_buffer, &len);
+    if( ret != NRF_SUCCESS ) {
         blecon_fatal_error();
     }
 
     // Set payload
     ret = nfc_t2t_payload_set(_ndef_buffer, len);
-    if(ret != NRF_SUCCESS) {
+    if( ret != NRF_SUCCESS ) {
         blecon_fatal_error();
     }
 
-    if(nfc_active) {
+    if( nfc_active ) {
         blecon_nrf5_nfc_start(&_nfc);
     }
 }
 
 void blecon_nrf5_nfc_start(struct blecon_nfc_t* nfc) {
     uint32_t ret = nfc_t2t_emulation_start();
-    if(ret != NRF_SUCCESS) {
+    if( ret != NRF_SUCCESS ) {
         blecon_fatal_error();
     }
 
@@ -102,7 +101,7 @@ void blecon_nrf5_nfc_start(struct blecon_nfc_t* nfc) {
 
 void blecon_nrf5_nfc_stop(struct blecon_nfc_t* nfc) {
     uint32_t ret = nfc_t2t_emulation_stop();
-    if(ret != NRF_SUCCESS) {
+    if( ret != NRF_SUCCESS ) {
         blecon_fatal_error();
     }
 
@@ -110,18 +109,22 @@ void blecon_nrf5_nfc_stop(struct blecon_nfc_t* nfc) {
 }
 
 // Private functions
-void nfc_callback(void * p_context, nfc_t2t_event_t event, const uint8_t * p_data, size_t data_length) {
-    (void)p_context;
-    (void)event;
-    (void)p_data;
-    (void)data_length;
+void nfc_callback(void* p_context, nfc_t2t_event_t event, const uint8_t* p_data, size_t data_length) {
+    (void) p_context;
+    (void) event;
+    (void) p_data;
+    (void) data_length;
 }
 
 #else
 
-void blecon_nrf5_nfc_setup(struct blecon_nfc_t* nfc) {}
-void blecon_nrf5_nfc_set_message(struct blecon_nfc_t* nfc, const uint8_t* nfc_data, size_t nfc_data_sz) {}
-void blecon_nrf5_nfc_start(struct blecon_nfc_t* nfc) {}
-void blecon_nrf5_nfc_stop(struct blecon_nfc_t* nfc) {}
+void blecon_nrf5_nfc_setup(struct blecon_nfc_t* nfc) {
+}
+void blecon_nrf5_nfc_set_message(struct blecon_nfc_t* nfc, const uint8_t* nfc_data, size_t nfc_data_sz) {
+}
+void blecon_nrf5_nfc_start(struct blecon_nfc_t* nfc) {
+}
+void blecon_nrf5_nfc_stop(struct blecon_nfc_t* nfc) {
+}
 
 #endif

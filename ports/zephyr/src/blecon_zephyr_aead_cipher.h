@@ -16,7 +16,7 @@ extern "C" {
 
 struct blecon_zephyr_aead_cipher_t {
     struct blecon_crypto_aead_cipher_t cipher;
-    psa_key_handle_t key_handle;
+    psa_key_id_t key_handle;
 };
 
 #ifdef __cplusplus

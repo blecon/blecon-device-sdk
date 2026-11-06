@@ -25,7 +25,6 @@
 #error "APP_SCHEDULER_ENABLED must be enabled in sdk_config.h"
 #endif
 
-
 #if NRF_MODULE_ENABLED(APP_USBD)
 #include "app_usbd.h"
 #endif
@@ -65,7 +64,6 @@ struct blecon_event_loop_t* blecon_nrf5_event_loop_init(void) {
 }
 
 void blecon_nrf5_event_loop_setup(struct blecon_event_loop_t* event_loop) {
-
 }
 
 struct blecon_event_t* blecon_nrf5_event_loop_register_event(struct blecon_event_loop_t* event_loop) {
@@ -78,16 +76,15 @@ struct blecon_event_t* blecon_nrf5_event_loop_register_event(struct blecon_event
 }
 
 void blecon_nrf5_event_loop_run(struct blecon_event_loop_t* event_loop) {
-    while(true) {
+    while( true ) {
         app_sched_execute();
 
-        // USB event queue needs to be processed here if enabled
-        #if NRF_MODULE_ENABLED(APP_USBD)
+// USB event queue needs to be processed here if enabled
+#if NRF_MODULE_ENABLED(APP_USBD)
         app_usbd_event_queue_process();
-        #endif
+#endif
 
-        if( NRF_LOG_PROCESS() == false )
-        {
+        if( NRF_LOG_PROCESS() == false ) {
             nrf_pwr_mgmt_run();
         }
     }

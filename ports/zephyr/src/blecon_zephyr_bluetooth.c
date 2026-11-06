@@ -23,7 +23,11 @@
 #include "zephyr/random/random.h"
 #include "zephyr/sys/byteorder.h"
 
-#if defined(CONFIG_BT_CTLR_TX_PWR_PLUS_8)
+#if CONFIG_BOARD_NATIVE_SIM || CONFIG_BOARD_NATIVE_SIM_NATIVE_64
+// Ignore TX power in native sim
+// TODO: Get TX power from controller
+#define BLUETOOTH_TX_POWER 0
+#elif defined(CONFIG_BT_CTLR_TX_PWR_PLUS_8)
 #define BLUETOOTH_TX_POWER 8
 #elif defined(CONFIG_BT_CTLR_TX_PWR_PLUS_7)
 #define BLUETOOTH_TX_POWER 7
@@ -58,7 +62,6 @@
 #define BLUETOOTH_TX_POWER 0
 #endif
 
-
 struct blecon_zephyr_bluetooth_t;
 
 static void blecon_zephyr_bluetooth_setup(struct blecon_bluetooth_t* bluetooth);
@@ -88,7 +91,7 @@ static struct bt_conn_cb zephyr_bluetooth_callbacks = {
 };
 
 static struct bt_le_scan_cb zephyr_bluetooth_scan_callbacks = {
-	.recv = blecon_zephyr_bluetooth_on_scan_report_received,
+    .recv = blecon_zephyr_bluetooth_on_scan_report_received,
 };
 
 // Singleton
@@ -118,7 +121,7 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
     };
 
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = BLECON_ALLOC(sizeof(struct blecon_zephyr_bluetooth_t));
-    if(zephyr_bluetooth == NULL) {
+    if( zephyr_bluetooth == NULL ) {
         blecon_fatal_error();
     }
 
@@ -128,7 +131,7 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
     blecon_bluetooth_init(&zephyr_bluetooth->bluetooth, &bluetooth_fn);
 
     zephyr_bluetooth->event_loop = event_loop;
-    for(size_t idx = 0; idx < BLECON_MAX_ADVERTISING_SETS; idx++) {
+    for( size_t idx = 0; idx < BLECON_MAX_ADVERTISING_SETS; idx++ ) {
         zephyr_bluetooth->adv_sets[idx].identity = -1;
         zephyr_bluetooth->adv_sets[idx].handle = NULL;
     }
@@ -143,7 +146,7 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
 
 void blecon_zephyr_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = (struct blecon_zephyr_bluetooth_t*) bluetooth;
-    if(!bt_is_ready()) {
+    if( !bt_is_ready() ) {
         int ret = bt_enable(NULL);
         blecon_assert(ret == 0);
     }
@@ -161,7 +164,6 @@ void blecon_zephyr_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
 }
 
 void blecon_zephyr_bluetooth_shutdown(struct blecon_bluetooth_t* bluetooth) {
-
 }
 
 struct blecon_bluetooth_advertising_set_t* blecon_zephyr_bluetooth_advertising_set_new(struct blecon_bluetooth_t* bluetooth) {
@@ -176,18 +178,19 @@ struct blecon_bluetooth_advertising_set_t* blecon_zephyr_bluetooth_advertising_s
 
 void blecon_zephyr_bluetooth_advertising_set_update_params(struct blecon_bluetooth_advertising_set_t* adv_set, struct blecon_bluetooth_advertising_params_t* params) {
     struct blecon_zephyr_bluetooth_advertising_set_t* zephyr_adv_set = (struct blecon_zephyr_bluetooth_advertising_set_t*) adv_set;
-    
+
     // Set advertising address
-    bt_addr_le_t bt_addr = {0};
-    bt_addr.type = params->bt_addr.addr_type;
-    memcpy(bt_addr.a.val, params->bt_addr.bytes, BLECON_BLUETOOTH_ADDR_SZ);
+    bt_addr_le_t bt_addr = { 0 };
+    blecon_assert(params->device_id.type == blecon_bluetooth_device_id_type_addr);
+    bt_addr.type = params->device_id.addr.addr_type;
+    memcpy(bt_addr.a.val, params->device_id.addr.bytes, BLECON_BLUETOOTH_ADDR_SZ);
 
     // Create identity
     int ret = 0;
-    if(zephyr_adv_set->identity != -1) {
+    if( zephyr_adv_set->identity != -1 ) {
         // Re-use existing identity
         ret = bt_id_reset(zephyr_adv_set->identity, &bt_addr, NULL);
-        blecon_assert( (ret >= 0) || (ret == -EALREADY) );
+        blecon_assert((ret >= 0) || (ret == -EALREADY));
     } else {
         // Create new identity
         ret = bt_id_create(&bt_addr, NULL);
@@ -210,27 +213,27 @@ void blecon_zephyr_bluetooth_advertising_set_update_params(struct blecon_bluetoo
     // Set options
     // Use identity address
     adv_param.options |= BT_LE_ADV_OPT_USE_IDENTITY;
-    
-    if(!params->legacy_pdu) {
+
+    if( !params->legacy_pdu ) {
         adv_param.options |= BT_LE_ADV_OPT_EXT_ADV;
     }
 
     // Use legacy PDU for 1M PHY, extended PDU otherwise
-    if(params->phy == blecon_bluetooth_phy_coded) {
+    if( params->phy == blecon_bluetooth_phy_coded ) {
         adv_param.options |= BT_LE_ADV_OPT_CODED;
     }
 
-    if(params->is_connectable) {
-        adv_param.options |= BT_LE_ADV_OPT_CONNECTABLE;
+    if( params->is_connectable ) {
+        adv_param.options |= BT_LE_ADV_OPT_CONN;
     }
 
     // Mandatory to be scannable when connectable and using legacy PDUs
-    if(params->is_connectable && params->legacy_pdu) {
+    if( params->is_connectable && params->legacy_pdu ) {
         adv_param.options |= BT_LE_ADV_OPT_SCANNABLE;
     }
 
     // Set advertising parameters
-    if(zephyr_adv_set->handle != NULL) {
+    if( zephyr_adv_set->handle != NULL ) {
         // Update advertising set
         ret = bt_le_ext_adv_update_param(zephyr_adv_set->handle, &adv_param);
     } else {
@@ -249,10 +252,10 @@ void blecon_zephyr_bluetooth_advertising_set_update_data(struct blecon_bluetooth
     blecon_assert(zephyr_adv_set->handle != NULL);
 
     // Set data - bit annoying, we have to re-parse our encoded advertising packet
-    struct bt_data z_adv_data[16] = {0};
+    struct bt_data z_adv_data[16] = { 0 };
     size_t z_adv_data_sz = 0;
     size_t adv_data_pos = 0;
-    while(adv_data_pos < data->data_sz) {
+    while( adv_data_pos < data->data_sz ) {
         z_adv_data[z_adv_data_sz].data_len = data->data[adv_data_pos++] - 1;
         z_adv_data[z_adv_data_sz].type = data->data[adv_data_pos++];
         z_adv_data[z_adv_data_sz].data = &data->data[adv_data_pos];
@@ -274,7 +277,6 @@ void blecon_zephyr_bluetooth_advertising_set_start(struct blecon_bluetooth_adver
 
 void blecon_zephyr_bluetooth_advertising_set_stop(struct blecon_bluetooth_advertising_set_t* adv_set) {
     struct blecon_zephyr_bluetooth_advertising_set_t* zephyr_adv_set = (struct blecon_zephyr_bluetooth_advertising_set_t*) adv_set;
-    
     // BLE spec says that disabling an already disabled adv set has no effect
     // So should be fine to call that even if it's already disabled
     // (because of a connection for instance)
@@ -295,30 +297,38 @@ void blecon_zephyr_bluetooth_get_address(struct blecon_bluetooth_t* bluetooth, s
 void blecon_zephyr_bluetooth_connection_get_info(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_connection_info_t* info) {
     struct blecon_zephyr_bluetooth_connection_t* zephyr_connection = (struct blecon_zephyr_bluetooth_connection_t*) connection;
 
-    struct bt_conn_info conn_info = {0};
+    struct bt_conn_info conn_info = { 0 };
     int ret = bt_conn_get_info(zephyr_connection->conn, &conn_info);
-	blecon_assert(ret == 0);
+    blecon_assert(ret == 0);
 
     // Addresses
-    info->our_bt_addr.addr_type = conn_info.le.local->type;
-    memcpy(info->our_bt_addr.bytes, conn_info.le.local->a.val, BLECON_BLUETOOTH_ADDR_SZ);
-    info->peer_bt_addr.addr_type = conn_info.le.remote->type;
-    memcpy(info->peer_bt_addr.bytes, conn_info.le.remote->a.val, BLECON_BLUETOOTH_ADDR_SZ);
+    struct blecon_bluetooth_addr_t our_addr = { 0 };
+    our_addr.addr_type = conn_info.le.local->type;
+    memcpy(our_addr.bytes, conn_info.le.local->a.val, BLECON_BLUETOOTH_ADDR_SZ);
+    info->our_device_id = blecon_bluetooth_device_id_from_addr(our_addr);
+    struct blecon_bluetooth_addr_t peer_addr = { 0 };
+    peer_addr.addr_type = conn_info.le.remote->type;
+    memcpy(peer_addr.bytes, conn_info.le.remote->a.val, BLECON_BLUETOOTH_ADDR_SZ);
+    info->peer_device_id = blecon_bluetooth_device_id_from_addr(peer_addr);
 
     // Role (central/peripheral)
     info->is_central = conn_info.role == BT_CONN_ROLE_CENTRAL;
 
     // PHY
-    switch(conn_info.le.phy->rx_phy) {
+    switch( conn_info.le.phy->rx_phy ) {
         case BT_GAP_LE_PHY_CODED:
+        case BT_GAP_LE_PHY_CODED_S8:
+        case BT_GAP_LE_PHY_CODED_S2:
             info->phy = blecon_bluetooth_phy_coded;
             break;
         case BT_GAP_LE_PHY_2M:
             info->phy = blecon_bluetooth_phy_2m;
             break;
         case BT_GAP_LE_PHY_1M:
-        default:
             info->phy = blecon_bluetooth_phy_1m;
+            break;
+        default:
+            blecon_fatal_error();
             break;
     }
 }
@@ -339,11 +349,10 @@ void blecon_zephyr_bluetooth_connection_disconnect(struct blecon_bluetooth_conne
     struct blecon_zephyr_bluetooth_connection_t* zephyr_connection = (struct blecon_zephyr_bluetooth_connection_t*) connection;
 
     int ret = bt_conn_disconnect(zephyr_connection->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-    blecon_assert( (ret == 0) || (ret == -ENOTCONN) || (ret == -EIO) ); // EIO can be returned if connection was closed already
+    blecon_assert((ret == 0) || (ret == -ENOTCONN) || (ret == -EIO)); // EIO can be returned if connection was closed already
 }
 
 void blecon_zephyr_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection) {
-
 }
 
 void blecon_zephyr_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan) {
@@ -358,10 +367,10 @@ void blecon_zephyr_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, st
         .window_coded = 0,
     };
 
-    if(phy_mask.phy_coded) {
+    if( phy_mask.phy_coded ) {
         scan_param.options |= BT_LE_SCAN_OPT_CODED;
     }
-    if(!phy_mask.phy_1m) {
+    if( !phy_mask.phy_1m ) {
         scan_param.options |= BT_LE_SCAN_OPT_NO_1M;
     }
 
@@ -382,11 +391,11 @@ void blecon_zephyr_bluetooth_on_connected(struct bt_conn* conn, uint8_t conn_err
     }
 
     // Ignore central connections
-    struct bt_conn_info conn_info = {0};
+    struct bt_conn_info conn_info = { 0 };
     int ret = bt_conn_get_info(conn, &conn_info);
-	blecon_assert(ret == 0);
+    blecon_assert(ret == 0);
 
-	if(conn_info.role != BT_CONN_ROLE_PERIPHERAL) {
+    if( conn_info.role != BT_CONN_ROLE_PERIPHERAL ) {
         return;
     }
 
@@ -395,14 +404,14 @@ void blecon_zephyr_bluetooth_on_connected(struct bt_conn* conn, uint8_t conn_err
 
     // Find advertising set based on connection identity
     struct blecon_zephyr_bluetooth_advertising_set_t* zephyr_adv_set = NULL;
-    for(size_t idx = 0; idx < zephyr_bluetooth->adv_sets_count; idx++) {
-        if(zephyr_bluetooth->adv_sets[idx].identity == conn_info.id) {
+    for( size_t idx = 0; idx < zephyr_bluetooth->adv_sets_count; idx++ ) {
+        if( zephyr_bluetooth->adv_sets[idx].identity == conn_info.id ) {
             zephyr_adv_set = &zephyr_bluetooth->adv_sets[idx];
             break;
         }
     }
 
-    if(zephyr_adv_set == NULL) {
+    if( zephyr_adv_set == NULL ) {
         blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
         return;
     }
@@ -428,14 +437,13 @@ void blecon_zephyr_bluetooth_on_connected(struct bt_conn* conn, uint8_t conn_err
     // Init
     blecon_bluetooth_connection_init(&zephyr_bluetooth->connection.connection, &zephyr_bluetooth->bluetooth);
     zephyr_bluetooth->connection.conn = bt_conn_ref(conn);
-    blecon_bluetooth_on_new_connection(&zephyr_bluetooth->bluetooth, 
-        &zephyr_bluetooth->connection.connection, &zephyr_adv_set->set);
+    blecon_bluetooth_on_new_connection(&zephyr_bluetooth->bluetooth, &zephyr_bluetooth->connection.connection, &zephyr_adv_set->set);
     blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
 }
 
 void blecon_zephyr_bluetooth_on_disconnected(struct bt_conn* conn, uint8_t reason) {
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = _zephyr_bluetooth;
-    
+
     blecon_event_loop_lock(zephyr_bluetooth->event_loop);
 
     // Ignore central connections
@@ -455,19 +463,36 @@ void blecon_zephyr_bluetooth_on_scan_report_received(const struct bt_le_scan_rec
 
     blecon_event_loop_lock(zephyr_bluetooth->event_loop);
 
+    struct blecon_bluetooth_addr_t scan_addr = { 0 };
+    scan_addr.addr_type = info->addr->type;
+    memcpy(scan_addr.bytes, info->addr->a.val, BLECON_BLUETOOTH_ADDR_SZ);
     struct blecon_bluetooth_advertising_info_t adv_info = {
-        .bt_addr.addr_type = info->addr->type,
+        .device_id = blecon_bluetooth_device_id_from_addr(scan_addr),
         .legacy_pdu = (info->adv_props & BT_GAP_ADV_PROP_EXT_ADV) == 0,
         .is_connectable = (info->adv_props & BT_GAP_ADV_PROP_CONNECTABLE) != 0,
         .is_scan_response = (info->adv_props & BT_GAP_ADV_PROP_SCAN_RESPONSE) != 0,
         .sid = info->sid,
         .tx_power = info->tx_power,
         .rssi = info->rssi,
-        .phy = (info->primary_phy == BT_GAP_LE_PHY_CODED) ? blecon_bluetooth_phy_coded : 
-            (info->primary_phy == BT_GAP_LE_PHY_2M) ? blecon_bluetooth_phy_2m : 
-            blecon_bluetooth_phy_1m
+        .phy = 0
     };
-    memcpy(adv_info.bt_addr.bytes, info->addr->a.val, BLECON_BLUETOOTH_ADDR_SZ);
+
+    switch( info->primary_phy ) {
+        case BT_GAP_LE_PHY_1M:
+            adv_info.phy = blecon_bluetooth_phy_1m;
+            break;
+        case BT_GAP_LE_PHY_2M:
+            adv_info.phy = blecon_bluetooth_phy_2m;
+            break;
+        case BT_GAP_LE_PHY_CODED:
+        case BT_GAP_LE_PHY_CODED_S8:
+        case BT_GAP_LE_PHY_CODED_S2:
+            adv_info.phy = blecon_bluetooth_phy_coded;
+            break;
+        default:
+            blecon_fatal_error();
+            break;
+    }
 
     struct blecon_bluetooth_advertising_data_t adv_data = {
         .data = buf->data,
@@ -479,29 +504,30 @@ void blecon_zephyr_bluetooth_on_scan_report_received(const struct bt_le_scan_rec
 }
 
 // Polyfill from https://github.com/nrfconnect/sdk-zephyr/blob/main/samples/bluetooth/hci_pwr_ctrl/src/main.c
-static void ble_read_conn_rssi(uint16_t handle, int8_t* rssi)
-{
-	struct net_buf *buf, *rsp = NULL;
-	struct bt_hci_cp_read_rssi *cp;
-	struct bt_hci_rp_read_rssi *rp;
+static void ble_read_conn_rssi(uint16_t handle, int8_t* rssi) {
+    struct net_buf *buf, *rsp = NULL;
+    struct bt_hci_cp_read_rssi* cp;
+    struct bt_hci_rp_read_rssi* rp;
 
-	int err;
+    int err;
 
-	buf = bt_hci_cmd_create(BT_HCI_OP_READ_RSSI, sizeof(*cp));
-	if (!buf) {
-		return;
-	}
+    buf = bt_hci_cmd_alloc(K_NO_WAIT);
+    if( !buf ) {
+        *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
+        return;
+    }
 
-	cp = net_buf_add(buf, sizeof(*cp));
-	cp->handle = sys_cpu_to_le16(handle);
+    cp = net_buf_add(buf, sizeof(*cp));
+    cp->handle = sys_cpu_to_le16(handle);
 
-	err = bt_hci_cmd_send_sync(BT_HCI_OP_READ_RSSI, buf, &rsp);
-	if (err) {
-		return;
-	}
+    err = bt_hci_cmd_send_sync(BT_HCI_OP_READ_RSSI, buf, &rsp);
+    if( err ) {
+        *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
+        return;
+    }
 
-	rp = (void *)rsp->data;
-	*rssi = rp->rssi;
+    rp = (void*) rsp->data;
+    *rssi = rp->rssi;
 
-	net_buf_unref(rsp);
+    net_buf_unref(rsp);
 }

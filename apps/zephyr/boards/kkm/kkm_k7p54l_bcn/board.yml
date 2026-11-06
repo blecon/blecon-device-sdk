@@ -1,0 +1,13 @@
+board:
+  name: kkm_k7p54l_bcn
+  full_name: KKM K7P54L-BCN Beacon
+  vendor: kkm
+  revision:
+    format: major.minor.patch
+    default: 1.1.0
+    exact: false
+    revisions:
+    - name: 1.0.0
+    - name: 1.1.0
+  socs:
+  - name: nrf54l15

@@ -33,10 +33,7 @@ struct blecon_journal_iterator_t {
     bool valid;
 };
 
-void blecon_journal_init(struct blecon_journal_t* journal,
-                            uint8_t* array, size_t array_sz,
-                            const size_t* event_type_size, size_t event_type_size_count
-                        );
+void blecon_journal_init(struct blecon_journal_t* journal, uint8_t* array, size_t array_sz, const size_t* event_type_size, size_t event_type_size_count);
 
 void blecon_journal_push(struct blecon_journal_t* journal, uint32_t timestamp, blecon_journal_event_type_t event_type, const void* event);
 
@@ -46,9 +43,7 @@ struct blecon_journal_iterator_t blecon_journal_begin(struct blecon_journal_t* j
 
 struct blecon_journal_iterator_t blecon_journal_next(const struct blecon_journal_iterator_t* journal_iterator);
 
-void blecon_journal_get_metadata(const struct blecon_journal_iterator_t* journal_iterator, 
-    uint32_t* id, uint32_t* timestamp,
-    blecon_journal_event_type_t* event_type, size_t* event_size);
+void blecon_journal_get_metadata(const struct blecon_journal_iterator_t* journal_iterator, uint32_t* id, uint32_t* timestamp, blecon_journal_event_type_t* event_type, size_t* event_size);
 void blecon_journal_get_event(const struct blecon_journal_iterator_t* journal_iterator, void* event);
 
 void blecon_journal_erase_until(struct blecon_journal_iterator_t* journal_iterator);

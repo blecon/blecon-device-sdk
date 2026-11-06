@@ -48,7 +48,7 @@ bool memfault_get_next_chunk(struct blecon_memfault_t* memfault) {
 
     sPacketizerMetadata metadata;
     bool data_available = memfault_packetizer_begin(&cfg, &metadata);
-    if (!data_available) {
+    if( !data_available ) {
         return false;
     }
 
@@ -59,7 +59,7 @@ bool memfault_get_chunk_data(struct blecon_memfault_t* memfault, uint8_t* buf, s
     eMemfaultPacketizerStatus packetizer_status = memfault_packetizer_get_next(buf, sz);
     blecon_assert(packetizer_status != kMemfaultPacketizerStatus_NoMoreData);
 
-    if(packetizer_status == kMemfaultPacketizerStatus_EndOfChunk) {
+    if( packetizer_status == kMemfaultPacketizerStatus_EndOfChunk ) {
         return false;
     }
 
@@ -68,7 +68,7 @@ bool memfault_get_chunk_data(struct blecon_memfault_t* memfault, uint8_t* buf, s
 
 // Memfault integration
 #if CONFIG_BLECON_MEMFAULT_DEFAULT_DEVICE_INFO
-void memfault_platform_get_device_info(sMemfaultDeviceInfo *info) {
+void memfault_platform_get_device_info(sMemfaultDeviceInfo* info) {
     info->device_serial = memfault_device_uuid_str;
     info->hardware_version = CONFIG_BLECON_MEMFAULT_HARDWARE_VERSION;
     info->software_version = CONFIG_BLECON_MEMFAULT_SOFTWARE_VERSION;

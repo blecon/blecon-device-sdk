@@ -1,0 +1,8 @@
+# Copyright (c) Blecon Ltd
+# SPDX-License-Identifier: Apache-2.0
+board:
+  name: mokosmart_l02s_bcn
+  full_name: MokoSmart L02S-BCN Beacon
+  vendor: mokosmart
+  socs:
+  - name: nrf54l15

@@ -33,19 +33,21 @@ static void blecon_zephyr_l2cap_bearer_sent(struct bt_l2cap_chan* l2cap_chan);
 static void blecon_zephyr_l2cap_bearer_seg_recv(struct bt_l2cap_chan* l2cap_chan, size_t sdu_len, off_t seg_offset, struct net_buf_simple* seg);
 
 const static struct bt_l2cap_chan_ops blecon_zephyr_l2cap_ops = {
-	.connected = blecon_zephyr_l2cap_bearer_connected,
-	.disconnected = blecon_zephyr_l2cap_bearer_disconnected,
-	.alloc_buf = blecon_zephyr_l2cap_bearer_alloc_buf,
-	.sent = blecon_zephyr_l2cap_bearer_sent,
+    .connected = blecon_zephyr_l2cap_bearer_connected,
+    .disconnected = blecon_zephyr_l2cap_bearer_disconnected,
+    .alloc_buf = blecon_zephyr_l2cap_bearer_alloc_buf,
+    .sent = blecon_zephyr_l2cap_bearer_sent,
     .seg_recv = blecon_zephyr_l2cap_bearer_seg_recv,
 };
 
 const static struct bt_l2cap_chan_ops blecon_zephyr_l2cap_empty_ops = { 0 };
 
-NET_BUF_POOL_FIXED_DEFINE(l2cap_tx_pool, CONFIG_BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS * BLECON_L2CAP_MAX_CONNECTIONS * BLECON_L2CAP_MAX_QUEUED_TX_BUFFERS, // Handle a single connection at a time
-    BT_L2CAP_BUF_SIZE(BLECON_L2CAP_MPS), 8, NULL);
-NET_BUF_POOL_FIXED_DEFINE(l2cap_rx_pool, CONFIG_BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS * BLECON_L2CAP_MAX_CONNECTIONS * BLECON_L2CAP_MAX_QUEUED_RX_BUFFERS, // Handle a single connection at a time
-    BT_L2CAP_BUF_SIZE(BLECON_L2CAP_MPS), 8, NULL);
+// User data size: two pointers to allow for storage of a function pointer and associated context.
+// Using sizeof(void*) * 2 instead of a hardcoded value to support both 32-bit and 64-bit architectures.
+NET_BUF_POOL_FIXED_DEFINE(l2cap_tx_pool, CONFIG_BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS* BLECON_L2CAP_MAX_CONNECTIONS* BLECON_L2CAP_MAX_QUEUED_TX_BUFFERS, // Handle a single connection at a time
+                          BT_L2CAP_BUF_SIZE(BLECON_L2CAP_MPS), sizeof(void*) * 2, NULL);
+NET_BUF_POOL_FIXED_DEFINE(l2cap_rx_pool, CONFIG_BLECON_ZEPHYR_BLUETOOTH_MAX_CONNECTIONS* BLECON_L2CAP_MAX_CONNECTIONS* BLECON_L2CAP_MAX_QUEUED_RX_BUFFERS, // Handle a single connection at a time
+                          BT_L2CAP_BUF_SIZE(BLECON_L2CAP_MPS), sizeof(void*) * 2, NULL);
 
 // Validate configuration
 static_assert(BLECON_L2CAP_MPS == CONFIG_BT_L2CAP_TX_MTU /* This actually refers to the MPS */, "CONFIG_BT_L2CAP_TX_MTU does not match BLECON_L2CAP_MPS");
@@ -66,10 +68,10 @@ void blecon_zephyr_l2cap_bearer_server_accept(struct blecon_zephyr_l2cap_bearer_
     blecon_zephyr_l2cap_bearer_connect(l2cap_bearer, conn);
 
     *chan = &l2cap_bearer->l2cap_chan.chan;
-    
+
     // Give initial credits
     int ret = bt_l2cap_chan_give_credits(&l2cap_bearer->l2cap_chan.chan, BLECON_L2CAP_MAX_QUEUED_RX_BUFFERS);
-    blecon_assert( ret == 0 );
+    blecon_assert(ret == 0);
 }
 
 void blecon_zephyr_l2cap_bearer_init_client(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer, struct blecon_event_loop_t* event_loop, struct bt_conn* conn, uint8_t psm) {
@@ -83,7 +85,7 @@ void blecon_zephyr_l2cap_bearer_init_client(struct blecon_zephyr_l2cap_bearer_t*
     blecon_zephyr_l2cap_bearer_connect(l2cap_bearer, conn);
 
     int ret = bt_l2cap_chan_connect(conn, &l2cap_bearer->l2cap_chan.chan, psm);
-    blecon_assert( ret == 0 );
+    blecon_assert(ret == 0);
 }
 
 struct blecon_bearer_t* blecon_zephyr_l2cap_bearer_as_bearer(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer) {
@@ -111,17 +113,16 @@ void blecon_zephyr_l2cap_bearer_init_common(struct blecon_zephyr_l2cap_bearer_t*
     l2cap_bearer->event_loop = event_loop;
 }
 
-void blecon_zephyr_l2cap_bearer_connect(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer, struct bt_conn* conn)
-{
+void blecon_zephyr_l2cap_bearer_connect(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer, struct bt_conn* conn) {
     l2cap_bearer->conn = conn;
     memset(&l2cap_bearer->l2cap_chan, 0, sizeof(l2cap_bearer->l2cap_chan));
     l2cap_bearer->l2cap_chan.rx.mtu = BLECON_L2CAP_MTU;
     l2cap_bearer->l2cap_chan.rx.mps = BLECON_L2CAP_MPS;
-	l2cap_bearer->l2cap_chan.chan.ops = &blecon_zephyr_l2cap_ops;
+    l2cap_bearer->l2cap_chan.chan.ops = &blecon_zephyr_l2cap_ops;
 }
 
 struct blecon_buffer_t blecon_zephyr_l2cap_bearer_alloc(struct blecon_bearer_t* bearer, size_t sz, void* user_data) {
-    if(sz > blecon_zephyr_l2cap_bearer_mtu(bearer, user_data)) {
+    if( sz > blecon_zephyr_l2cap_bearer_mtu(bearer, user_data) ) {
         blecon_fatal_error();
     }
     return blecon_buffer_queue_alloc(sz);
@@ -149,14 +150,14 @@ void blecon_zephyr_l2cap_bearer_send(struct blecon_bearer_t* bearer, struct blec
        fail to allocate a buffer, we just crash with the assert below instead. */
     struct net_buf* z_buf = net_buf_alloc(&l2cap_tx_pool, K_NO_WAIT);
 
-    blecon_assert( z_buf != NULL );
+    blecon_assert(z_buf != NULL);
 
     net_buf_reserve(z_buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
     net_buf_add_mem(z_buf, buf.data, buf.sz);
 
     int ret = bt_l2cap_chan_send(&l2cap_bearer->l2cap_chan.chan, z_buf);
 
-    if (ret == -ENOTCONN) {
+    if( ret == -ENOTCONN ) {
         // Other end closing the connection is not an error
 
         /*
@@ -173,11 +174,10 @@ void blecon_zephyr_l2cap_bearer_send(struct blecon_bearer_t* bearer, struct blec
             be deallocated once the reference count reaches 0.
         */
         net_buf_unref(z_buf);
-    }
-    else {
+    } else {
         // Zephyr now returns the number of bytes sent which can be 0 if we've run out of credits,
         // however 0 bytes sent is not an error and means the buffer was queued for later sending
-        blecon_assert( ret >= 0 );
+        blecon_assert(ret >= 0);
     }
 
     blecon_buffer_free(buf);
@@ -189,13 +189,12 @@ void blecon_zephyr_l2cap_bearer_close(struct blecon_bearer_t* bearer, void* user
     if( l2cap_bearer->conn == NULL ) {
         return; // Already disconnected
     }
-   
+
     bt_l2cap_chan_disconnect(&l2cap_bearer->l2cap_chan.chan);
 }
 
 void blecon_zephyr_l2cap_bearer_connected(struct bt_l2cap_chan* l2cap_chan) {
-    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*)
-        ((char*)l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
+    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*) ((char*) l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
 
     blecon_event_loop_lock(l2cap_bearer->event_loop);
     blecon_bearer_on_open(&l2cap_bearer->bearer);
@@ -203,32 +202,32 @@ void blecon_zephyr_l2cap_bearer_connected(struct bt_l2cap_chan* l2cap_chan) {
 }
 
 void blecon_zephyr_l2cap_bearer_disconnected(struct bt_l2cap_chan* l2cap_chan) {
-    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*)
-        ((char*)l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
+    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*) ((char*) l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
 
     blecon_event_loop_lock(l2cap_bearer->event_loop);
     l2cap_bearer->conn = NULL; // Indicate bearer is disconnected
+
+    // Set ops to empty to prevent any late callbacks after disconnect
+    l2cap_bearer->l2cap_chan.chan.ops = &blecon_zephyr_l2cap_empty_ops;
 
     blecon_bearer_on_closed(&l2cap_bearer->bearer);
     blecon_event_loop_unlock(l2cap_bearer->event_loop);
 }
 
 struct net_buf* blecon_zephyr_l2cap_bearer_alloc_buf(struct bt_l2cap_chan* l2cap_chan) {
-	return net_buf_alloc(&l2cap_rx_pool, K_FOREVER);
+    return net_buf_alloc(&l2cap_rx_pool, K_FOREVER);
 }
 
 void blecon_zephyr_l2cap_bearer_sent(struct bt_l2cap_chan* l2cap_chan) {
-    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*)
-        ((char*)l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
-    
+    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*) ((char*) l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
+
     blecon_event_loop_lock(l2cap_bearer->event_loop);
     blecon_bearer_on_sent(&l2cap_bearer->bearer);
     blecon_event_loop_unlock(l2cap_bearer->event_loop);
 }
 
 void blecon_zephyr_l2cap_bearer_seg_recv(struct bt_l2cap_chan* l2cap_chan, size_t sdu_len, off_t seg_offset, struct net_buf_simple* seg) {
-    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*)
-        ((char*)l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
+    struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*) ((char*) l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
 
     blecon_event_loop_lock(l2cap_bearer->event_loop);
     struct blecon_buffer_t b_buf = blecon_buffer_alloc(seg->len);
@@ -242,4 +241,3 @@ void blecon_zephyr_l2cap_bearer_seg_recv(struct bt_l2cap_chan* l2cap_chan, size_
 
     // The buffer will be dereferenced by the caller upon function return
 }
-

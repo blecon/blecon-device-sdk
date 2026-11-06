@@ -15,11 +15,11 @@ extern "C" {
 #if BLECON_CUSTOM_ERROR_HANDLER == 1
 #include "blecon_custom_error_handler.h"
 #else
-void blecon_fatal_error(void);
+void blecon_fatal_error(void) __attribute__((noreturn));
 #endif
 
 static inline void blecon_assert(bool condition) {
-    if(!condition) {
+    if( !condition ) {
         blecon_fatal_error();
     }
 }

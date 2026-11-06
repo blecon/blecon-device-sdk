@@ -9,6 +9,9 @@
 #include <zephyr/dfu/flash_img.h>
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/sys/reboot.h>
+#if defined(CONFIG_BT)
+#include <zephyr/bluetooth/bluetooth.h>
+#endif
 
 #include "stdio.h"
 #include "string.h"
@@ -30,7 +33,8 @@ static void memfault_ota_client_on_error(struct blecon_memfault_ota_client_t* cl
 
 // Download client callbacks
 static void download_client_on_new_chunk(
-    struct blecon_download_client_t* client, uint8_t* data, size_t data_sz, bool done, void* user_data);
+    struct blecon_download_client_t* client, uint8_t* data, size_t data_sz, bool done, void* user_data
+);
 static void download_client_on_error(struct blecon_download_client_t* client, void* user_data);
 
 // Events
@@ -42,7 +46,6 @@ static void dfu_thread_fn(void*, void*, void*);
 #define DFU_THREAD_STACK_SIZE 2048
 #define DFU_THREAD_PRIORITY 5
 #define MAX_CHUNKS_IN_FLIGHT 4
-
 
 struct blecon_zephyr_memfault_ota_dfu_target_op_t {
     bool reset;
@@ -66,16 +69,16 @@ struct k_thread _dfu_thread;
 
 static struct blecon_zephyr_memfault_ota_t* current_ota = NULL;
 
-void blecon_zephyr_memfault_ota_init(struct blecon_zephyr_memfault_ota_t* ota, struct blecon_event_loop_t* event_loop, struct blecon_t* blecon, const char* request_namespace, const struct blecon_zephyr_memfault_ota_callbacks_t *callbacks, void* user_data) {
-
+void blecon_zephyr_memfault_ota_init(struct blecon_zephyr_memfault_ota_t* ota, struct blecon_event_loop_t* event_loop, struct blecon_t* blecon, const char* request_namespace, const struct blecon_zephyr_memfault_ota_callbacks_t* callbacks, void* user_data) {
     ota->event_loop = event_loop;
     ota->blecon = blecon;
     ota->request_namespace = request_namespace;
     ota->callbacks = callbacks;
     ota->user_data = user_data;
+    ota->downloading_update = false;
+    ota->ota_url = NULL;
 
-
-    sMemfaultDeviceInfo info = {0};
+    sMemfaultDeviceInfo info = { 0 };
     memfault_platform_get_device_info(&info);
     ota->memfault_ota_parameters.hardware_version = info.hardware_version;
     ota->memfault_ota_parameters.software_type = info.software_type;
@@ -85,8 +88,7 @@ void blecon_zephyr_memfault_ota_init(struct blecon_zephyr_memfault_ota_t* ota, s
         .on_ota_status_update = memfault_ota_client_on_ota_status_update,
         .on_error = memfault_ota_client_on_error
     };
-    blecon_memfault_ota_client_init(&ota->memfault_ota_client, blecon_get_request_processor(ota->blecon),
-        &ota->memfault_ota_parameters, request_namespace, &memfault_ota_client_callbacks, ota);
+    blecon_memfault_ota_client_init(&ota->memfault_ota_client, blecon_get_request_processor(ota->blecon), &ota->memfault_ota_parameters, request_namespace, &memfault_ota_client_callbacks, ota);
 
     // Check for update
     blecon_memfault_ota_client_check_for_update(&ota->memfault_ota_client);
@@ -100,40 +102,42 @@ void blecon_zephyr_memfault_ota_init(struct blecon_zephyr_memfault_ota_t* ota, s
 
     current_ota = ota;
     // Start thread
-    k_thread_create(&_dfu_thread, _dfu_thread_stack, K_THREAD_STACK_SIZEOF(_dfu_thread_stack),
-                dfu_thread_fn, NULL, NULL, NULL,
-                DFU_THREAD_PRIORITY, 0, K_NO_WAIT);
+    k_thread_create(&_dfu_thread, _dfu_thread_stack, K_THREAD_STACK_SIZEOF(_dfu_thread_stack), dfu_thread_fn, NULL, NULL, NULL, DFU_THREAD_PRIORITY, 0, K_NO_WAIT);
 }
 
 void blecon_zephyr_memfault_ota_check_for_update(struct blecon_zephyr_memfault_ota_t* ota) {
-    if(!ota->downloading_update) {
+    if( !ota->downloading_update ) {
         blecon_memfault_ota_client_check_for_update(&ota->memfault_ota_client);
     }
 }
 
 void blecon_zephyr_memfault_ota_confirm_current_image(struct blecon_zephyr_memfault_ota_t* ota) {
-    if(boot_is_img_confirmed()) {
+    if( boot_is_img_confirmed() ) {
         return;
     }
     boot_write_img_confirmed();
 }
 
 void memfault_ota_client_on_ota_status_update(struct blecon_memfault_ota_client_t* client, char* ota_url, void* user_data) {
-    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*)user_data;
-    if(ota_url == NULL) {
-        if (ota->callbacks->on_ota_error) {
+    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*) user_data;
+    if( ota_url == NULL ) {
+        if( ota->callbacks->on_ota_error ) {
             ota->callbacks->on_ota_error(ota, blecon_zephyr_memfault_ota_status_no_update_available);
         }
         return;
-    }
-    else if(ota->downloading_update) {
-        free(ota_url);
+    } else if( ota->downloading_update ) {
+        blecon_memfault_ota_client_free_url(ota_url);
         return;
     }
 
     ota->downloading_update = true;
 
-    if (ota->callbacks->on_ota_start) {
+    // Take ownership of the URL for the lifetime of the download. The download
+    // client only borrows the pointer (and re-reads it on resumed requests), so
+    // it is freed at the terminal points (completion / error), not here.
+    ota->ota_url = ota_url;
+
+    if( ota->callbacks->on_ota_start ) {
         ota->callbacks->on_ota_start(ota, ota_url);
     }
 
@@ -151,18 +155,18 @@ void memfault_ota_client_on_ota_status_update(struct blecon_memfault_ota_client_
     k_fifo_put(&ota->dfu_target_ops, reset_op);
 
     // Download
-    blecon_download_client_download(&ota->download_client, ota_url, 0, 1*1024*1024, ota);
+    blecon_download_client_download(&ota->download_client, ota_url, 0, 1 * 1024 * 1024, ota);
 }
 
 void memfault_ota_client_on_error(struct blecon_memfault_ota_client_t* client, void* user_data) {
-    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*)user_data;
-    if (ota->callbacks->on_ota_error) {
+    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*) user_data;
+    if( ota->callbacks->on_ota_error ) {
         ota->callbacks->on_ota_error(ota, blecon_zephyr_memfault_ota_status_error_bad_url);
     }
 }
 
 void download_client_on_new_chunk(struct blecon_download_client_t* client, uint8_t* data, size_t data_sz, bool done, void* user_data) {
-    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*)user_data;
+    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*) user_data;
 
     struct blecon_zephyr_memfault_ota_dfu_target_op_t* op = malloc(sizeof(struct blecon_zephyr_memfault_ota_dfu_target_op_t));
     blecon_assert(op != NULL);
@@ -175,62 +179,67 @@ void download_client_on_new_chunk(struct blecon_download_client_t* client, uint8
 }
 
 void download_client_on_error(struct blecon_download_client_t* client, void* user_data) {
-    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*)user_data;
+    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*) user_data;
     ota->downloading_update = false;
+    blecon_memfault_ota_client_free_url(ota->ota_url);
+    ota->ota_url = NULL;
 
-    if (ota->callbacks->on_ota_error) {
+    if( ota->callbacks->on_ota_error ) {
         ota->callbacks->on_ota_error(ota, blecon_zephyr_memfault_ota_status_error_download_failed);
     }
 }
 
 void blecon_zephyr_memfault_ota_process_dfu_target_events(struct blecon_event_t* event, void* user_data) {
-    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*)user_data;
+    struct blecon_zephyr_memfault_ota_t* ota = (struct blecon_zephyr_memfault_ota_t*) user_data;
     do {
         struct blecon_zephyr_memfault_ota_dfu_target_event_t* event = k_fifo_get(&ota->dfu_target_events, K_NO_WAIT);
-        if(event == NULL) {
+        if( event == NULL ) {
             return;
         }
 
-        switch (event->event_type)
-        {
-        case blecon_zephyr_memfault_ota_dfu_target_event_type_chunk_written:
-            // Free chunk
-            blecon_download_client_free_chunk(&ota->download_client, event->chunk_data);
-            if (ota->callbacks->on_ota_progress) {
-                ota->callbacks->on_ota_progress(ota, ota->flash_ctx.stream.bytes_written);
-            }
-            if(event->done) {
-                // Check if we're done
-                if(!ota->download_client.downloading) {
-                    // Done
-                    ota->downloading_update = false;
-                    if (ota->callbacks->on_ota_complete) {
-                        ota->callbacks->on_ota_complete(ota, ota->flash_ctx.stream.bytes_written);
+        switch( event->event_type ) {
+            case blecon_zephyr_memfault_ota_dfu_target_event_type_chunk_written:
+                // Free chunk
+                blecon_download_client_free_chunk(&ota->download_client, event->chunk_data);
+                if( ota->callbacks->on_ota_progress ) {
+                    ota->callbacks->on_ota_progress(ota, ota->flash_ctx.stream.bytes_written);
+                }
+                if( event->done ) {
+                    // Check if we're done
+                    if( !ota->download_client.downloading ) {
+                        // Done
+                        ota->downloading_update = false;
+                        blecon_memfault_ota_client_free_url(ota->ota_url);
+                        ota->ota_url = NULL;
+                        if( ota->callbacks->on_ota_complete ) {
+                            ota->callbacks->on_ota_complete(ota, ota->flash_ctx.stream.bytes_written);
+                        }
                     }
                 }
-            }
-            break;
-        case blecon_zephyr_memfault_ota_dfu_target_event_type_error:
-        default:
-            ota->downloading_update = false;
-            // Process error event
+                break;
+            case blecon_zephyr_memfault_ota_dfu_target_event_type_error:
+            default:
+                ota->downloading_update = false;
+                // Process error event
+                blecon_memfault_ota_client_free_url(ota->ota_url);
+                ota->ota_url = NULL;
 
-            if (ota->callbacks->on_ota_error) {
-                ota->callbacks->on_ota_error(ota, blecon_zephyr_memfault_ota_status_error_during_dfu);
-            }
-            break;
+                if( ota->callbacks->on_ota_error ) {
+                    ota->callbacks->on_ota_error(ota, blecon_zephyr_memfault_ota_status_error_during_dfu);
+                }
+                break;
         }
 
         free(event);
-    } while(true);
+    } while( true );
 }
 
 void dfu_thread_fn(void*, void*, void*) {
     struct blecon_zephyr_memfault_ota_t* ota = current_ota;
-    while(true) {
+    while( true ) {
         struct blecon_zephyr_memfault_ota_dfu_target_op_t* op = k_fifo_get(&ota->dfu_target_ops, K_FOREVER);
-        if(op->reset) {
-            int ret = flash_img_init_id(&ota->flash_ctx, FIXED_PARTITION_ID(mcuboot_secondary));
+        if( op->reset ) {
+            int ret = flash_img_init_id(&ota->flash_ctx, PARTITION_ID(mcuboot_secondary));
             blecon_assert(ret == 0);
         } else {
             int ret = flash_img_buffered_write(&ota->flash_ctx, op->data, op->data_sz, op->done);
@@ -253,29 +262,40 @@ void dfu_thread_fn(void*, void*, void*) {
 
 void blecon_zephyr_memfault_ota_install_and_reboot(struct blecon_zephyr_memfault_ota_t* ota) {
     // Install and reboot
-    if(!ota->downloading_update) {
+    if( !ota->downloading_update ) {
         boot_request_upgrade(BOOT_UPGRADE_TEST);
+#if defined(CONFIG_BT)
+        // Quiesce the Bluetooth controller before sys_reboot() tears down the
+        // system clock. On nRF SoCs MPSL's radio interrupt is a zero-latency IRQ
+        // that irq_lock() cannot mask, so a radio event firing during
+        // sys_clock_disable() can hang the reset. Disabling Bluetooth stops the
+        // controller scheduling radio events, closing that window. Best effort:
+        // we reboot regardless of the result.
+        if( bt_is_ready() ) {
+            (void)bt_disable();
+        }
+#endif
         sys_reboot(SYS_REBOOT_WARM);
     } else {
-        if (ota->callbacks->on_ota_error) {
+        if( ota->callbacks->on_ota_error ) {
             ota->callbacks->on_ota_error(ota, blecon_zephyr_memfault_ota_status_error_installation_attempted_during_download);
         }
     }
 }
 
-void *blecon_zephyr_memfault_ota_get_user_data(struct blecon_zephyr_memfault_ota_t* ota) {
+void* blecon_zephyr_memfault_ota_get_user_data(struct blecon_zephyr_memfault_ota_t* ota) {
     return ota->user_data;
 }
 
 enum blecon_zephyr_memfault_ota_status_t blecon_zephyr_memfault_ota_get_status(struct blecon_zephyr_memfault_ota_t* ota) {
-    if(ota->downloading_update) {
+    if( ota->downloading_update ) {
         return blecon_zephyr_memfault_ota_status_downloading;
     }
     return blecon_zephyr_memfault_ota_status_idle;
 }
 
-const char *blecon_zephyr_memfault_ota_status_to_string(enum blecon_zephyr_memfault_ota_status_t status) {
-    switch (status) {
+const char* blecon_zephyr_memfault_ota_status_to_string(enum blecon_zephyr_memfault_ota_status_t status) {
+    switch( status ) {
         case blecon_zephyr_memfault_ota_status_idle:
             return "idle";
         case blecon_zephyr_memfault_ota_status_downloading:

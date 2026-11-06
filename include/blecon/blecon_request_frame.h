@@ -23,7 +23,7 @@ struct blecon_request_frame_open_t {
 
 struct blecon_request_frame_outgoing_header_t {
     bool oneway;
-    const char* namespace;
+    const char* _namespace;
     size_t namespace_sz;
     const char* method;
     size_t method_sz;

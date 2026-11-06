@@ -12,8 +12,8 @@
 
 #include "zephyr/kernel.h"
 
-#define BLECON_EVENT_BREAK      (1u << 31u)
-#define BLECON_ZEPHYR_EVENT_LOOP_MAX_EVENTS        16u
+#define BLECON_EVENT_BREAK (1u << 31u)
+#define BLECON_ZEPHYR_EVENT_LOOP_MAX_EVENTS 16u
 
 struct blecon_zephyr_event_loop_t;
 
@@ -47,7 +47,7 @@ struct blecon_event_loop_t* blecon_zephyr_event_loop_new(void) {
     };
 
     struct blecon_zephyr_event_loop_t* zephyr_event_loop = BLECON_ALLOC(sizeof(struct blecon_zephyr_event_loop_t));
-    if(zephyr_event_loop == NULL) {
+    if( zephyr_event_loop == NULL ) {
         blecon_fatal_error();
     }
 
@@ -69,13 +69,13 @@ void blecon_zephyr_event_loop_break(struct blecon_event_loop_t* event_loop) {
 
 void blecon_zephyr_event_loop_setup(struct blecon_event_loop_t* event_loop) {
     struct blecon_zephyr_event_loop_t* zephyr_event_loop = (struct blecon_zephyr_event_loop_t*) event_loop;
-    (void)zephyr_event_loop;
+    (void) zephyr_event_loop;
 }
 
 void blecon_zephyr_event_loop_run(struct blecon_event_loop_t* event_loop) {
     struct blecon_zephyr_event_loop_t* zephyr_event_loop = (struct blecon_zephyr_event_loop_t*) event_loop;
 
-    while(true) {
+    while( true ) {
         uint32_t event_mask = BLECON_EVENT_BREAK | ~(UINT32_MAX << zephyr_event_loop->events_count);
 
         // Wait for events
@@ -85,7 +85,7 @@ void blecon_zephyr_event_loop_run(struct blecon_event_loop_t* event_loop) {
         k_event_set_masked(&zephyr_event_loop->z_event, 0, events);
 
         // Call any user event callback
-        for(size_t p = 0; p < zephyr_event_loop->events_count; p++) {
+        for( size_t p = 0; p < zephyr_event_loop->events_count; p++ ) {
             k_mutex_lock(&zephyr_event_loop->z_mutex, K_FOREVER);
             if( events & (1u << p) ) {
                 blecon_event_on_raised(&zephyr_event_loop->events[p].event);
@@ -125,8 +125,7 @@ void blecon_zephyr_event_loop_signal(struct blecon_event_loop_t* event_loop, str
     struct blecon_zephyr_event_t* zephyr_event = (struct blecon_zephyr_event_t*) event;
 
     // Retrieve event id based on position within the array
-    size_t event_id = (size_t)(zephyr_event - &zephyr_event_loop->events[0]);
+    size_t event_id = (size_t) (zephyr_event - &zephyr_event_loop->events[0]);
 
     k_event_post(&zephyr_event_loop->z_event, 1u << event_id);
 }
-

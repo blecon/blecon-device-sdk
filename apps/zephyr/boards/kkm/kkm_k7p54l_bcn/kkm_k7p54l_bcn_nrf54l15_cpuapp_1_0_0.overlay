@@ -1,0 +1,7 @@
+/*
+ * Copyright (c) 2024 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "kkm_k7p54l_bcn_nrf54l15_common_1_0_0.dtsi"
