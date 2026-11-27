@@ -43,8 +43,13 @@ A couple of notes when integrating the Blecon SDK with your nRF5 SDK app:
 #define NRF_CRYPTO_BACKEND_OBERON_HMAC_SHA256_ENABLED 1
 #define APP_SCHEDULER_ENABLED 1
 #define APP_TIMER_ENABLED 1
-#define APP_TIMER_CONFIG_USE_SCHEDULER 1
+#define APP_TIMER_CONFIG_USE_SCHEDULER 0
+#define NRF_SDH_DISPATCH_MODEL 1 // NRF_SDH_DISPATCH_MODEL_APPSH
 ```
+
+The SoftDevice's events must reach the application through `app_scheduler`
+(`NRF_SDH_DISPATCH_MODEL_APPSH`), since Blecon is called from thread mode only: an
+interrupt handler of your own defers to `app_scheduler` before calling it.
 
 Additionally, if using NFC:
 ```c

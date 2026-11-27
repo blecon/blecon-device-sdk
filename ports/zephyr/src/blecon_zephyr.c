@@ -4,6 +4,7 @@
  */
 #include "stdlib.h"
 #include "string.h"
+#include <zephyr/sys/util.h>
 
 #include "blecon_zephyr/blecon_zephyr.h"
 #include "blecon/blecon.h"
@@ -88,6 +89,7 @@ struct blecon_modem_t* blecon_zephyr_get_modem(void) {
         otp,
         nfc,
         CONFIG_BLECON_INTERNAL_MODEM_SCAN_BUFFER_SIZE,
+        IS_ENABLED(CONFIG_BLECON_IDENTITY_GENERATE_LEGACY_UUID_V4_ID),
         blecon_zephyr_allocator,
         NULL
     );

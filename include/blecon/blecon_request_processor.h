@@ -42,7 +42,10 @@ struct blecon_request_processor_fn_t {
     // into the client vote APIs -- the rollback runs after this returns, so a re-entrant vote
     // would be counted twice.
     bool (*set_connection_target)(struct blecon_request_processor_t* processor, bool connection_target);
+    // Whether the next frame_send() may be made. The processor asks before every
+    // frame_send(), and an owner may query its transport here (it is not a pure check).
     bool (*can_send_frame)(struct blecon_request_processor_t* processor);
+    // Called only straight after can_send_frame() returned true, with nothing in between.
     bool (*frame_send)(struct blecon_request_processor_t* processor, struct blecon_request_frame_t* frame);
 };
 
@@ -109,6 +112,11 @@ void blecon_request_processor_process(struct blecon_request_processor_t* process
 
 void blecon_request_processor_receive_frame(struct blecon_request_processor_t* processor, struct blecon_request_frame_t* frame);
 
+// A modem asks for the buffer of an incoming data frame here, from inside its pop. Returns
+// the request's client's buffer, or NULL when the frame cannot be taken: the request is
+// unknown, already failed, not expecting data, the frame exceeds its response MTU, or the
+// client refused it. In every case but the first two the request fails; its reset goes
+// out on the processor's next pass, never from the caller's stack, which is the modem's.
 uint8_t* blecon_request_processor_data_buffer_alloc(struct blecon_request_processor_t* processor, size_t sz, uint16_t request_id);
 
 struct blecon_request_processor_t* blecon_request_processor_client_get_processor(struct blecon_request_processor_client_t* client);

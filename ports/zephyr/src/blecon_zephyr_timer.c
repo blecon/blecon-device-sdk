@@ -41,11 +41,33 @@ struct blecon_timer_t* blecon_zephyr_timer_new(void) {
         blecon_fatal_error();
     }
 
+    // Zeroed, as a K_TIMER_DEFINE'd timer is: k_timer_init() leaves its timeout's tick count unset, and since
+    // Zephyr 4.4 the first k_timer_start() or k_timer_stop() reads it (z_abort_timeout() on a timeout not queued)
+    memset(zephyr_timer, 0, sizeof(struct blecon_zephyr_timer_t));
+
     blecon_timer_init(&zephyr_timer->timer, &timer_fn);
 
     k_timer_init(&zephyr_timer->z_timer, blecon_zephyr_timer_on_timeout, NULL);
 
     return &zephyr_timer->timer;
+}
+
+void blecon_zephyr_timer_free(struct blecon_timer_t* timer) {
+    struct blecon_zephyr_timer_t* zephyr_timer = (struct blecon_zephyr_timer_t*) timer;
+
+#if defined(CONFIG_TRACING_OBJECT_TRACKING)
+    // Object tracking holds every k_timer ever initialised in a list it never removes from:
+    // freeing one would leave that list a dangling node
+    blecon_fatal_error();
+#endif
+
+    // The kernel links a k_timer into lists of its own: unlink it from each before the memory
+    // goes (a running timer from the timeout list, every timer from the object core list)
+    k_timer_stop(&zephyr_timer->z_timer);
+#if defined(CONFIG_OBJ_CORE_TIMER)
+    k_obj_core_unlink(K_OBJ_CORE(&zephyr_timer->z_timer));
+#endif
+    BLECON_FREE(zephyr_timer);
 }
 
 void blecon_zephyr_timer_setup(struct blecon_timer_t* timer) {

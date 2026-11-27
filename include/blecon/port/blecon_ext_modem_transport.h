@@ -49,6 +49,12 @@ struct blecon_ext_modem_transport_rx_frame_t {
 
 struct blecon_ext_modem_transport_fn_t {
     void (*setup)(struct blecon_ext_modem_transport_t* transport);
+    // Send tx_frame and read the response into rx_frame; false on any failure. *event: set
+    // to true (never cleared by the transport) when a frame header the transport read on the
+    // way carried the modem's event bit -- an event-only frame before the response, or the
+    // response's own header -- and so possibly true on a false return. The external modem
+    // (blecon_ext_modem, this side) signals its event from it whatever the outcome, since
+    // the remote modem sends such a frame only once per event bit.
     bool (*exchange_frames)(struct blecon_ext_modem_transport_t* transport, struct blecon_ext_modem_transport_tx_frame_t* tx_frame, struct blecon_ext_modem_transport_rx_frame_t* rx_frame, bool* event);
 };
 

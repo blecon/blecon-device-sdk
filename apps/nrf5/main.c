@@ -46,6 +46,10 @@
 
 #include "blecon_app.h"
 
+#ifndef BLECON_IDENTITY_GENERATE_LEGACY_UUID_V4_ID
+#define BLECON_IDENTITY_GENERATE_LEGACY_UUID_V4_ID 0
+#endif
+
 // Allocator wrapper that ignores user_data and calls malloc
 static void* blecon_nrf5_allocator(size_t size, void* user_data) {
     (void)user_data;
@@ -228,6 +232,7 @@ int main(void)
 #else
         0,
 #endif
+        BLECON_IDENTITY_GENERATE_LEGACY_UUID_V4_ID,
         blecon_nrf5_allocator,
         NULL
     );

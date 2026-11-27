@@ -36,6 +36,15 @@ config BLECON_NO_MODEM
 
 endchoice
 
+config BLECON_IDENTITY_GENERATE_LEGACY_UUID_V4_ID
+    bool "Generate a legacy UUIDv4 identity"
+    depends on BLECON_INTERNAL_MODEM
+    default n
+    help
+        When identity storage is empty and OTP has no manufacturer-assigned
+        identity, generate and store a random UUIDv4. The default is to
+        start unprovisioned. A previously stored identity is reused.
+
 config BLECON_INTERNAL_MODEM_NFC
     bool "Blecon internal modem NFC support"
     default n
@@ -117,6 +126,10 @@ config BLECON_PORT_BLUETOOTH
     depends on BT_BUF_ACL_TX_SIZE >= 251
     depends on BT_BUF_ACL_RX_SIZE >= 251
     depends on BT_DIS
+    # A connection's RSSI is read with HCI Read RSSI, which a controller built into this image (the SoftDevice
+    # Controller, or Zephyr's own) answers only with BT_CTLR_CONN_RSSI, off unless BT_HCI_RAW: without it every
+    # read is an Unknown HCI Command. A controller on another core is built with BT_HCI_RAW, so it has the command
+    select BT_CTLR_CONN_RSSI if BT_HCI && HAS_BT_CTLR && BT_CTLR_CONN_RSSI_SUPPORT
 
 config BLECON_PORT_EVENT_LOOP
     bool "Blecon event loop port"
@@ -283,7 +296,7 @@ config BLECON_TRACING_SERIAL_BUFFER_SIZE
 
         It must hold the whole boot preamble, which blecon_int_modem_setup emits
         in one synchronous burst far faster than a UART drains it: its config
-        record alone is the whole compressed tracing spec (about 2.6 KB,
+        record alone is the whole compressed tracing spec (about 2.9 KiB,
         BLECON_TRACING_TRACE_CONFIG_SIZE in the generated header). A ring smaller
         than the burst drops its head -- init and the start of config -- and the
         capture then has nothing to decode against.
@@ -328,7 +341,7 @@ config BLECON_TRACING_INBAND_STICKY_POOL_SIZE
     help
         Byte pool holding every retained sticky record at once (unescaped, packed).
         The well-known config record dominates: its payload is the whole compressed
-        tracing spec (about 2.6 KB, BLECON_TRACING_TRACE_CONFIG_SIZE in the
+        tracing spec (about 2.9 KiB, BLECON_TRACING_TRACE_CONFIG_SIZE in the
         generated header); the rest sum to a few hundred bytes. Keep headroom above
         that sum -- a record that does not fit is counted by
         blecon_trace_ram_transport_sticky_dropped(). Every retained byte may double
@@ -337,7 +350,7 @@ config BLECON_TRACING_INBAND_STICKY_POOL_SIZE
 
 config BLECON_TRACING_INBAND_STICKY_SCRATCH_SIZE
     int "In-band trace sticky frame scratch size (bytes)"
-    default 3072
+    default 3328
     depends on BLECON_TRACING_BACKEND_INBAND
     help
         Scratch space in which the in-band RAM transport unescapes the single frame

@@ -15,6 +15,8 @@ extern "C" {
 #include "blecon/port/blecon_timer.h"
 
 struct blecon_timer_t* blecon_zephyr_timer_new(void);
+// Not with CONFIG_TRACING_OBJECT_TRACKING, whose list of timers has no removal: a fatal error there
+void blecon_zephyr_timer_free(struct blecon_timer_t* timer);
 
 #ifdef __cplusplus
 }

@@ -52,8 +52,11 @@ struct blecon_request_callbacks_t {
     /**
      * @brief Allocate memory for incoming data
      * @param receive_data_op the receive data operation instance
-     * @param sz the size of the buffer to allocate
-     * @return a pointer to the allocated buffer
+     * @param sz the size of the buffer to allocate (0 for an empty data frame)
+     * @return a buffer of at least sz bytes, which on_data_received is then given; or NULL
+     * to refuse the frame, which fails the request. NULL is a refusal whatever the size, so
+     * a client accepting an empty frame returns a pointer for it too (malloc(0) may return
+     * NULL).
      */
     uint8_t* (*alloc_incoming_data_buffer)(struct blecon_request_receive_data_op_t* receive_data_op, size_t sz);
 
@@ -78,7 +81,7 @@ struct blecon_request_parameters_t {
     const char* method;                                 ///< The method of this request's event type (maximum BLECON_METHOD_MAX_SZ characters, including null terminator) or NULL
     const char* request_content_type;                   ///< The content type of the request (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
     const char* response_content_type;                  ///< The expected content type of the response (e.g. application/cbor, maximum BLECON_CONTENT_TYPE_MAX_SZ characters, including null terminator) or NULL
-    size_t response_mtu;                                ///< The maximum size of a response data frame (for a single data operation, maximum BLECON_MTU)
+    size_t response_mtu;                                ///< The maximum size of a response data frame, which one receive data operation takes (maximum BLECON_MTU: a request with a larger one fails with blecon_request_status_transport_error). A longer response arrives as several frames, one per receive data operation
     const struct blecon_request_callbacks_t* callbacks; ///< The callbacks to use for this request
     void* user_data;                                    ///< User data to pass to the callbacks
 };

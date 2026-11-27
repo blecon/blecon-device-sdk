@@ -17,6 +17,7 @@
 #include "nrf_pwr_mgmt.h"
 #include "app_timer.h"
 #include "app_scheduler.h"
+#include "app_util_platform.h"
 
 // Validate nRF5 SDK Config
 #if !APP_TIMER_ENABLED || APP_TIMER_CONFIG_USE_SCHEDULER
@@ -31,7 +32,7 @@ static void blecon_nrf5_timer_cancel_timeout(struct blecon_timer_t* timer);
 
 static void blecon_nrf5_timeout_handler(void* p_context);
 static void blecon_nrf5_monotonic_time_offset_monitor_handler(void* p_context);
-static void blecon_nrf5_update_monotonic_ticks(void);
+static uint64_t blecon_nrf5_update_monotonic_ticks(void);
 
 #define RTC_BITS 24ul
 #define MAX_RTC_COUNTER_VAL 0xFFFFFFul
@@ -78,19 +79,19 @@ void blecon_nrf5_timer_setup(struct blecon_timer_t* timer) {
 #define RTC_FREQUENCY_DIVISOR (15ul - APP_TIMER_CONFIG_RTC_FREQUENCY)
 
 uint64_t blecon_nrf5_timer_get_monotonic_time(struct blecon_timer_t* timer) {
-    blecon_nrf5_update_monotonic_ticks();
+    uint64_t monotonic_ticks = blecon_nrf5_update_monotonic_ticks();
 
-    uint64_t time = _monotonic_ticks >> RTC_FREQUENCY_DIVISOR;                      // Divide by RTC frequency (+ prescaler) to get seconds
-    uint32_t remainder = _monotonic_ticks & ~(UINT32_MAX << RTC_FREQUENCY_DIVISOR); // Get remainder
+    uint64_t time = monotonic_ticks >> RTC_FREQUENCY_DIVISOR;                      // Divide by RTC frequency (+ prescaler) to get seconds
+    uint32_t remainder = monotonic_ticks & ~(UINT32_MAX << RTC_FREQUENCY_DIVISOR); // Get remainder
     time = time * 1000ul + ((remainder * 1000ul) >> RTC_FREQUENCY_DIVISOR);
     return time;
 }
 
 uint64_t blecon_nrf5_timer_get_monotonic_time_ns(struct blecon_timer_t* timer) {
-    blecon_nrf5_update_monotonic_ticks();
+    uint64_t monotonic_ticks = blecon_nrf5_update_monotonic_ticks();
 
-    uint64_t seconds = _monotonic_ticks >> RTC_FREQUENCY_DIVISOR;                   // Divide by RTC frequency (+ prescaler) to get seconds
-    uint32_t remainder = _monotonic_ticks & ~(UINT32_MAX << RTC_FREQUENCY_DIVISOR); // Get remainder
+    uint64_t seconds = monotonic_ticks >> RTC_FREQUENCY_DIVISOR;                   // Divide by RTC frequency (+ prescaler) to get seconds
+    uint32_t remainder = monotonic_ticks & ~(UINT32_MAX << RTC_FREQUENCY_DIVISOR); // Get remainder
     return seconds * 1000000000ull + (((uint64_t) remainder * 1000000000ull) >> RTC_FREQUENCY_DIVISOR);
 }
 
@@ -133,7 +134,14 @@ void blecon_nrf5_monotonic_time_offset_monitor_handler(void* p_context) {
 }
 
 // Internal functions
-void blecon_nrf5_update_monotonic_ticks(void) {
+uint64_t blecon_nrf5_update_monotonic_ticks(void) {
+    // Runs in thread mode (the monotonic time getters) and in the offset monitor's RTC1 interrupt:
+    // an interrupt landing between the counter read and the offset store would count the interval
+    // twice and move the offset backwards, so the read-modify-write, and the 64-bit read the getters
+    // use (two words), share one critical region
+    uint64_t monotonic_ticks = 0;
+
+    CRITICAL_REGION_ENTER();
     // Increment time offset
     uint32_t rtc_ticks = app_timer_cnt_get();
     uint32_t rtc_ticks_diff = app_timer_cnt_diff_compute(rtc_ticks, _rtc_ticks_offset);
@@ -143,4 +151,9 @@ void blecon_nrf5_update_monotonic_ticks(void) {
 
     // Sync offsets
     _rtc_ticks_offset = rtc_ticks;
+
+    monotonic_ticks = _monotonic_ticks;
+    CRITICAL_REGION_EXIT();
+
+    return monotonic_ticks;
 }

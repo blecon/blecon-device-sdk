@@ -90,6 +90,15 @@ void blecon_zephyr_memfault_ota_init(struct blecon_zephyr_memfault_ota_t* ota, s
     };
     blecon_memfault_ota_client_init(&ota->memfault_ota_client, blecon_get_request_processor(ota->blecon), &ota->memfault_ota_parameters, request_namespace, &memfault_ota_client_callbacks, ota);
 
+    // One download client serves every update: initialising it again would register its
+    // node on the request processor a second time, and reset the count of the chunks a
+    // failed download left with the DFU thread
+    const static struct blecon_download_client_callbacks_t download_client_callbacks = {
+        .on_new_chunk = download_client_on_new_chunk,
+        .on_error = download_client_on_error
+    };
+    blecon_download_client_init(&ota->download_client, blecon_get_request_processor(ota->blecon), MAX_CHUNKS_IN_FLIGHT, &download_client_callbacks, ota);
+
     // Check for update
     blecon_memfault_ota_client_check_for_update(&ota->memfault_ota_client);
 
@@ -140,12 +149,6 @@ void memfault_ota_client_on_ota_status_update(struct blecon_memfault_ota_client_
     if( ota->callbacks->on_ota_start ) {
         ota->callbacks->on_ota_start(ota, ota_url);
     }
-
-    const static struct blecon_download_client_callbacks_t download_client_callbacks = {
-        .on_new_chunk = download_client_on_new_chunk,
-        .on_error = download_client_on_error
-    };
-    blecon_download_client_init(&ota->download_client, blecon_get_request_processor(ota->blecon), MAX_CHUNKS_IN_FLIGHT, &download_client_callbacks, ota);
 
     // Reset DFU target
     struct blecon_zephyr_memfault_ota_dfu_target_op_t* reset_op = malloc(sizeof(struct blecon_zephyr_memfault_ota_dfu_target_op_t));
@@ -219,6 +222,9 @@ void blecon_zephyr_memfault_ota_process_dfu_target_events(struct blecon_event_t*
                 break;
             case blecon_zephyr_memfault_ota_dfu_target_event_type_error:
             default:
+                // Stop the download: the client serves the next update, whose download()
+                // asserts that none is in progress
+                blecon_download_client_cancel(&ota->download_client);
                 ota->downloading_update = false;
                 // Process error event
                 blecon_memfault_ota_client_free_url(ota->ota_url);

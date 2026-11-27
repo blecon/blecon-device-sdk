@@ -19,9 +19,18 @@
 #include "zephyr/bluetooth/bluetooth.h"
 #include "zephyr/bluetooth/conn.h"
 #include "zephyr/bluetooth/gap.h"
+#include "zephyr/bluetooth/gatt.h"
 #include "zephyr/bluetooth/hci.h"
 #include "zephyr/random/random.h"
 #include "zephyr/sys/byteorder.h"
+#include "zephyr/sys/util.h"
+
+// ATT_MTU's default on LE (Core v5.3 Vol 3 Part F 3.2.8), a link's until an exchange; Zephyr's own constant is internal
+#define BLECON_ZEPHYR_ATT_DEFAULT_MTU 23
+
+// The connection's ATT MTU record is the one ATT channel's: EATT channels have MTUs of their own, which Zephyr's
+// att_mtu_updated reports as two maxima over every channel, and a notification goes out on whichever fits
+BUILD_ASSERT(!IS_ENABLED(CONFIG_BT_EATT), "The Blecon Bluetooth port supports no EATT");
 
 #if CONFIG_BOARD_NATIVE_SIM || CONFIG_BOARD_NATIVE_SIM_NATIVE_64
 // Ignore TX power in native sim
@@ -79,15 +88,21 @@ static void blecon_zephyr_bluetooth_connection_disconnect(struct blecon_bluetoot
 static void blecon_zephyr_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection);
 static void blecon_zephyr_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan);
 static void blecon_zephyr_bluetooth_scan_stop(struct blecon_bluetooth_t* bluetooth);
+static void blecon_zephyr_bluetooth_setup_complete_task(struct blecon_task_t* task, void* user_data);
 
 static void blecon_zephyr_bluetooth_on_connected(struct bt_conn* conn, uint8_t conn_err);
 static void blecon_zephyr_bluetooth_on_disconnected(struct bt_conn* conn, uint8_t reason);
+static void blecon_zephyr_bluetooth_on_att_mtu_updated(struct bt_conn* conn, uint16_t tx, uint16_t rx);
 static void blecon_zephyr_bluetooth_on_scan_report_received(const struct bt_le_scan_recv_info* info, struct net_buf_simple* buf);
 static void ble_read_conn_rssi(uint16_t handle, int8_t* rssi);
 
 static struct bt_conn_cb zephyr_bluetooth_callbacks = {
     .connected = blecon_zephyr_bluetooth_on_connected,
     .disconnected = blecon_zephyr_bluetooth_on_disconnected
+};
+
+static struct bt_gatt_cb zephyr_bluetooth_gatt_callbacks = {
+    .att_mtu_updated = blecon_zephyr_bluetooth_on_att_mtu_updated
 };
 
 static struct bt_le_scan_cb zephyr_bluetooth_scan_callbacks = {
@@ -138,8 +153,17 @@ struct blecon_bluetooth_t* blecon_zephyr_bluetooth_init(struct blecon_event_loop
     zephyr_bluetooth->adv_sets_count = 0;
 
     zephyr_bluetooth->connection.conn = NULL;
+    zephyr_bluetooth->connection.att_mtu = BLECON_ZEPHYR_ATT_DEFAULT_MTU;
 
     blecon_zephyr_bluetooth_gatt_server_init(zephyr_bluetooth);
+
+    // Deferred setup-complete notification (raised out of setup(), never synchronously, once)
+    zephyr_bluetooth->setup_complete_raised = false;
+    blecon_task_init(&zephyr_bluetooth->setup_complete_task, blecon_zephyr_bluetooth_setup_complete_task, &zephyr_bluetooth->bluetooth);
+
+    // Here, once (the instance is a singleton), not in setup: bt_gatt_cb_register appends without checking, so a
+    // second registration would loop Zephyr's callback list
+    bt_gatt_cb_register(&zephyr_bluetooth_gatt_callbacks);
 
     return &zephyr_bluetooth->bluetooth;
 }
@@ -161,6 +185,22 @@ void blecon_zephyr_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
 
     bt_conn_cb_register(&zephyr_bluetooth_callbacks);
     bt_le_scan_cb_register(&zephyr_bluetooth_scan_callbacks);
+
+    // The stack is ready. Raise on_setup_complete from a scheduler task rather than
+    // synchronously from within setup() (control-flow rule 3: no synchronous up-calls).
+    // The layers above may invoke setup() more than once on a shared base port (as the host
+    // gateway's middleware stack does), so on_setup_complete is idempotent: guard against
+    // double-queueing.
+    if( !zephyr_bluetooth->setup_complete_raised ) {
+        zephyr_bluetooth->setup_complete_raised = true;
+        blecon_scheduler_queue_task(bluetooth->scheduler, &zephyr_bluetooth->setup_complete_task);
+    }
+}
+
+void blecon_zephyr_bluetooth_setup_complete_task(struct blecon_task_t* task, void* user_data) {
+    (void) task;
+    struct blecon_bluetooth_t* bluetooth = (struct blecon_bluetooth_t*) user_data;
+    blecon_bluetooth_on_setup_complete(bluetooth);
 }
 
 void blecon_zephyr_bluetooth_shutdown(struct blecon_bluetooth_t* bluetooth) {
@@ -277,6 +317,10 @@ void blecon_zephyr_bluetooth_advertising_set_start(struct blecon_bluetooth_adver
 
 void blecon_zephyr_bluetooth_advertising_set_stop(struct blecon_bluetooth_advertising_set_t* adv_set) {
     struct blecon_zephyr_bluetooth_advertising_set_t* zephyr_adv_set = (struct blecon_zephyr_bluetooth_advertising_set_t*) adv_set;
+    // A set never configured has no Zephyr set to stop: stopping a set that is not advertising has no effect
+    if( zephyr_adv_set->handle == NULL ) {
+        return;
+    }
     // BLE spec says that disabling an already disabled adv set has no effect
     // So should be fine to call that even if it's already disabled
     // (because of a connection for instance)
@@ -297,6 +341,7 @@ void blecon_zephyr_bluetooth_get_address(struct blecon_bluetooth_t* bluetooth, s
 void blecon_zephyr_bluetooth_connection_get_info(struct blecon_bluetooth_connection_t* connection, struct blecon_bluetooth_connection_info_t* info) {
     struct blecon_zephyr_bluetooth_connection_t* zephyr_connection = (struct blecon_zephyr_bluetooth_connection_t*) connection;
 
+    // The connection's own bt_conn, referenced until it is freed: once the link is gone, its last values
     struct bt_conn_info conn_info = { 0 };
     int ret = bt_conn_get_info(zephyr_connection->conn, &conn_info);
     blecon_assert(ret == 0);
@@ -336,11 +381,19 @@ void blecon_zephyr_bluetooth_connection_get_info(struct blecon_bluetooth_connect
 void blecon_zephyr_bluetooth_connection_get_power_info(struct blecon_bluetooth_connection_t* connection, int8_t* tx_power, int8_t* rssi) {
     struct blecon_zephyr_bluetooth_connection_t* zephyr_connection = (struct blecon_zephyr_bluetooth_connection_t*) connection;
 
+    *tx_power = BLUETOOTH_TX_POWER;
+
+    // Zephyr names the link's handle only while it reads the bt_conn connected: not once a disconnection is under way
+    // (connection_disconnect's), nor once it has processed the controller's Disconnection Complete, which it does ahead
+    // of the disconnected callback the port raises, nor after that callback (the connection holds its bt_conn until
+    // it is freed). No reading then, and the controller is not asked: it may have given the handle to a new link
     uint16_t conn_handle = 0;
     int ret = bt_hci_get_conn_handle(zephyr_connection->conn, &conn_handle);
+    if( ret == -ENOTCONN ) {
+        *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
+        return;
+    }
     blecon_assert(ret == 0);
-
-    *tx_power = BLUETOOTH_TX_POWER;
 
     ble_read_conn_rssi(conn_handle, rssi);
 }
@@ -348,11 +401,20 @@ void blecon_zephyr_bluetooth_connection_get_power_info(struct blecon_bluetooth_c
 void blecon_zephyr_bluetooth_connection_disconnect(struct blecon_bluetooth_connection_t* connection) {
     struct blecon_zephyr_bluetooth_connection_t* zephyr_connection = (struct blecon_zephyr_bluetooth_connection_t*) connection;
 
+    // -ENOTCONN once Zephyr has processed the controller's Disconnection Complete (the disconnected callback raised or
+    // not); -EIO when the controller has ended the link and Zephyr has yet to process that event
     int ret = bt_conn_disconnect(zephyr_connection->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-    blecon_assert((ret == 0) || (ret == -ENOTCONN) || (ret == -EIO)); // EIO can be returned if connection was closed already
+    blecon_assert((ret == 0) || (ret == -ENOTCONN) || (ret == -EIO));
 }
 
 void blecon_zephyr_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection) {
+    struct blecon_zephyr_bluetooth_connection_t* zephyr_connection = (struct blecon_zephyr_bluetooth_connection_t*) connection;
+    blecon_assert(zephyr_connection->conn != NULL);
+
+    // A connection freed while its disconnection is under way raises nothing more: the disconnected callback no
+    // longer finds its bt_conn
+    bt_conn_unref(zephyr_connection->conn);
+    zephyr_connection->conn = NULL;
 }
 
 void blecon_zephyr_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan) {
@@ -434,9 +496,14 @@ void blecon_zephyr_bluetooth_on_connected(struct bt_conn* conn, uint8_t conn_err
     ret = bt_conn_le_data_len_update(conn, &len_params);
     blecon_assert(ret == 0);
 
-    // Init
+    // Init. The port has one connection: its user frees it before the next one (as the advertiser asserts)
+    blecon_assert(zephyr_bluetooth->connection.conn == NULL);
     blecon_bluetooth_connection_init(&zephyr_bluetooth->connection.connection, &zephyr_bluetooth->bluetooth);
     zephyr_bluetooth->connection.conn = bt_conn_ref(conn);
+    blecon_assert(zephyr_bluetooth->connection.conn != NULL);
+    // Zephyr reports the ATT channel's MTU ahead of this callback (bt_l2cap_connected before notify_connected), and
+    // nothing can have exchanged it yet: the peer's ATT PDUs go through this same thread after it
+    zephyr_bluetooth->connection.att_mtu = BLECON_ZEPHYR_ATT_DEFAULT_MTU;
     blecon_bluetooth_on_new_connection(&zephyr_bluetooth->bluetooth, &zephyr_bluetooth->connection.connection, &zephyr_adv_set->set);
     blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
 }
@@ -446,15 +513,35 @@ void blecon_zephyr_bluetooth_on_disconnected(struct bt_conn* conn, uint8_t reaso
 
     blecon_event_loop_lock(zephyr_bluetooth->event_loop);
 
-    // Ignore central connections
+    // Ignore central connections, and a connection freed while its disconnection was under way
     if( conn != zephyr_bluetooth->connection.conn ) {
         blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
         return;
     }
 
-    bt_conn_unref(zephyr_bluetooth->connection.conn);
-    zephyr_bluetooth->connection.conn = NULL;
+    // The connection keeps its bt_conn reference until it is freed (in this callback, or later)
     blecon_bluetooth_connection_on_disconnected(&zephyr_bluetooth->connection.connection);
+    blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+}
+
+void blecon_zephyr_bluetooth_on_att_mtu_updated(struct bt_conn* conn, uint16_t tx, uint16_t rx) {
+    struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = _zephyr_bluetooth;
+
+    blecon_event_loop_lock(zephyr_bluetooth->event_loop);
+
+    // Ignore other connections
+    if( conn != zephyr_bluetooth->connection.conn ) {
+        blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+        return;
+    }
+
+    // Raised at each MTU exchange on the link, the peer's request or the response to ours. With the one ATT channel
+    // there is, the two values are its own, and its ATT MTU (bt_gatt_get_mtu's) the lesser; Zephyr refuses a value
+    // below the default from the peer, and its own is never below it
+    uint16_t att_mtu = MIN(tx, rx);
+    blecon_assert(att_mtu >= BLECON_ZEPHYR_ATT_DEFAULT_MTU);
+    zephyr_bluetooth->connection.att_mtu = att_mtu;
+
     blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
 }
 
@@ -511,23 +598,30 @@ static void ble_read_conn_rssi(uint16_t handle, int8_t* rssi) {
 
     int err;
 
-    buf = bt_hci_cmd_alloc(K_NO_WAIT);
-    if( !buf ) {
-        *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
-        return;
-    }
+    // Waits for a command buffer, as Zephyr's own commands do (and the sample this comes from), and as the command
+    // then waits for the controller's answer: a shortage is no failure of the link
+    buf = bt_hci_cmd_alloc(K_FOREVER);
+    blecon_assert(buf != NULL);
 
     cp = net_buf_add(buf, sizeof(*cp));
     cp->handle = sys_cpu_to_le16(handle);
 
     err = bt_hci_cmd_send_sync(BT_HCI_OP_READ_RSSI, buf, &rsp);
-    if( err ) {
+    if( err != 0 ) {
+        // No reading, whatever the controller refused: the value only reports the link. Zephyr logs every status it
+        // is refused with (a warning naming the opcode and the status), has released the command's buffer and sets no
+        // response. -EIO is the expected refusal, the controller's Unknown Connection Identifier: it has ended the
+        // link, and Zephyr has yet to process its Disconnection Complete (the SoftDevice Controller's driver hands a
+        // command's completion ahead of the events the controller holds). Zephyr returns -EIO for every status it has
+        // no code of its own for: an Unknown HCI Command too, which the port's Kconfig rules out for a controller built
+        // into the image (it selects BT_CTLR_CONN_RSSI). None of its own codes (Connection Limit Exceeded, Insufficient
+        // Resources, Invalid Parameters, Command Disallowed) is expected
         *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
         return;
     }
 
     rp = (void*) rsp->data;
-    *rssi = rp->rssi;
+    *rssi = rp->rssi; // 127 (BLECON_BLUETOOTH_RSSI_UNKNOWN) when the controller has no reading
 
     net_buf_unref(rsp);
 }

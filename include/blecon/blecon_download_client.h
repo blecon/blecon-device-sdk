@@ -64,6 +64,12 @@ struct blecon_download_client_t {
 
 void blecon_download_client_init(struct blecon_download_client_t* client, struct blecon_request_processor_t* request_processor, size_t max_concurrent_receive_data_ops, const struct blecon_download_client_callbacks_t* callbacks, void* user_data);
 
+// Cancel a download in progress (blecon_download_client_cancel(); no callback is raised) and
+// remove the client from its request processor, which withdraws any connection vote it holds.
+// Every chunk handed to the application must have been released with
+// blecon_download_client_free_chunk() before.
+void blecon_download_client_cleanup(struct blecon_download_client_t* client);
+
 void blecon_download_client_download(struct blecon_download_client_t* client, const char* url, size_t offset, size_t max_size, void* user_data);
 
 void blecon_download_client_cancel(struct blecon_download_client_t* client);

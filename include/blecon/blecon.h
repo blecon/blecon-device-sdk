@@ -101,6 +101,7 @@ struct blecon_callbacks_t {
  * @param otp a platform-specific otp instance, or NULL if not available
  * @param nfc a platform-specific nfc instance
  * @param scan_buffer_size the size of the scan buffer
+ * @param generate_legacy_uuid generate a UUIDv4 when identity storage is empty and OTP has no identity assignment
  * @param allocator a function to allocate memory
  * @param allocator_user_data user data to pass to the allocator
  * @return a pointer to a struct blecon_modem_t instance
@@ -114,12 +115,18 @@ struct blecon_modem_t* blecon_int_modem_create(
     struct blecon_otp_t* otp,
     struct blecon_nfc_t* nfc,
     size_t scan_buffer_size,
+    bool generate_legacy_uuid,
     void* (*allocator)(size_t size, void* user_data),
     void* allocator_user_data
 );
 
 /**
  * @brief Destroy internal modem instance
+ *
+ * Cleans the modem up and, if it was set up, releases its Bluetooth resources and shuts the
+ * Bluetooth instance down. The latter needs a port that can free advertising sets: on the
+ * Zephyr and nRF5 ports, whose modem lives as long as the firmware, destroying a set-up modem
+ * is a fatal error.
  *
  * @param modem a pointer to a struct blecon_modem_t instance created by blecon_int_modem_create()
  * @param deallocator a function to deallocate memory or NULL
@@ -172,7 +179,9 @@ void blecon_init(struct blecon_t* blecon, struct blecon_modem_t* modem);
  *
  * Releases what blecon_init() set up and detaches the instance from its modem, which
  * the application owns and destroys after this call. Requests still submitted and
- * clients still registered on the request processor must be cleaned up before.
+ * clients still registered on the request processor must be cleaned up before. A
+ * connection, or an attempt at one, the modem holds for the instance is terminated, as
+ * by blecon_connection_terminate().
  *
  * @param blecon the blecon instance to clean-up
  */
@@ -243,6 +252,14 @@ bool blecon_connection_initiate(struct blecon_t* blecon);
 
 /**
  * @brief Terminate the current connection, or cancel the connection attempt
+ *
+ * This includes a connection the modem made on its own and reported (the internal modem
+ * connects for its network registration, and keeps that connection for the application
+ * until it is terminated). A connection another client of the instance's request
+ * processor still holds (the memfault or download client) stays until it is released,
+ * and the modem may keep one its own clients are still using (the network registration,
+ * an in-band trace upload) until they are done; the call succeeds either way, and the
+ * disconnection is reported through the callbacks when it happens.
  *
  * @param blecon the blecon instance
  * @return true on success, or false on failure
@@ -393,11 +410,13 @@ struct blecon_t {
 
     bool is_setup;
     bool is_connected;
+    bool connection_target; // The modem holds a connection target: from an initiate it accepted or a connection it reported, until a terminate or a disconnection
     struct blecon_modem_info_t modem_info;
     struct blecon_task_queue_t task_queue;
     struct blecon_request_processor_t request_processor;
     struct blecon_request_processor_client_t request_processor_client;
     size_t outgoing_request_frame_queue_space_count;
+    bool outgoing_request_frame_queue_space_count_valid; // The count was read since the last connection or has-space event; until it is, nothing is sent
     void (*peer_scan_report_iterator)(const struct blecon_modem_peer_scan_report_t*, void*);
     void (*raw_scan_report_iterator)(const struct blecon_modem_raw_scan_report_t*, void*);
     void* iterators_user_data;

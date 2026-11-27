@@ -56,7 +56,7 @@ struct blecon_bluetooth_l2cap_server_t* blecon_nrf5_bluetooth_l2cap_server_new(s
     struct blecon_nrf5_l2cap_server_t* nrf5_l2cap_server = &_l2cap_servers[_l2cap_servers_count];
     _l2cap_servers_count++;
 
-    blecon_bearer_set_functions(&nrf5_l2cap_server->bearer, &blecon_nrf5_l2cap_server_functions, &nrf5_l2cap_server);
+    blecon_bearer_set_functions(&nrf5_l2cap_server->bearer, &blecon_nrf5_l2cap_server_functions, nrf5_l2cap_server);
     nrf5_l2cap_server->psm = psm;
     nrf5_l2cap_server->l2cap_cid = BLE_L2CAP_CID_INVALID;
     nrf5_l2cap_server->open = false;
@@ -122,8 +122,6 @@ void blecon_nrf5_l2cap_server_try_send_or_close(struct blecon_nrf5_l2cap_server_
             return;
         }
 
-        bool success = false;
-
         // Check buffer size
         struct blecon_buffer_t buf = blecon_buffer_queue_peek(&l2cap_server->pending_tx_bufs);
 
@@ -152,24 +150,22 @@ void blecon_nrf5_l2cap_server_try_send_or_close(struct blecon_nrf5_l2cap_server_
         blecon_buffer_queue_push(&l2cap_server->tx_bufs, buf);
 
         uint32_t err_code = sd_ble_l2cap_ch_tx(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid, &obj);
-        if( err_code == NRF_ERROR_RESOURCES ) {
-            goto done;
-        } else if( err_code == NRF_ERROR_INVALID_STATE ) {
-            goto done;
-        }
-        blecon_assert(err_code == NRF_SUCCESS);
-
-        success = true;
-
-    done:
-        if( !success ) {
-            // Do not free buffer here, as it's already in the queue
-            // It will be freed when the bearer is closed
-
-            // Close bearer
-            blecon_nrf5_l2cap_server_close(&l2cap_server->bearer, &l2cap_server);
+        if( (err_code == NRF_ERROR_RESOURCES)
+            || (err_code == NRF_ERROR_INVALID_STATE)
+            || (err_code == NRF_ERROR_NOT_FOUND)
+            || (err_code == BLE_ERROR_INVALID_CONN_HANDLE) ) {
+            // Not sent. NRF_ERROR_RESOURCES: the channel's TX queue is full. The other three: the channel is ending, its
+            // BLE_L2CAP_EVT_CH_RELEASED (and the link's BLE_GAP_EVT_DISCONNECTED, if the link has ended) waiting in
+            // app_scheduler's queue -- a release under way (NRF_ERROR_INVALID_STATE: the peer's, the port's own or the
+            // link's, since the port sends only once the setup has completed), the channel gone (NRF_ERROR_NOT_FOUND) or
+            // the link (BLE_ERROR_INVALID_CONN_HANDLE).
+            // The buffer is not freed here: it is in the TX queue, freed with the rest at the channel's release. The
+            // bearer is closed as on its user's close; on a link already ended the SoftDevice refuses the channel's
+            // release and the disconnection that close asks for, and their codes are not read
+            blecon_nrf5_l2cap_server_close(&l2cap_server->bearer, l2cap_server);
             return;
         }
+        blecon_assert(err_code == NRF_SUCCESS);
     }
 
     // If closing and no more pending TX buffers, close the bearer
@@ -199,8 +195,6 @@ static inline void blecon_nrf5_l2cap_server_ch_setup_request(ble_evt_t const* p_
         }
     }
 
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*) l2cap_server->l2cap_server.bluetooth;
-
     ch_setup_params.status = BLE_L2CAP_CH_STATUS_CODE_SUCCESS;
 
     if( l2cap_server == NULL ) {
@@ -219,6 +213,7 @@ static inline void blecon_nrf5_l2cap_server_ch_setup_request(ble_evt_t const* p_
     }
 
     // OK
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*) l2cap_server->l2cap_server.bluetooth;
     ch_setup_params.rx_params.rx_mps = BLECON_NRF5_BLUETOOTH_L2CAP_MPS;
     if( ch_setup_params.rx_params.rx_mps < BLE_L2CAP_MPS_MIN ) {
         ch_setup_params.rx_params.rx_mps = BLE_L2CAP_MPS_MIN;
@@ -238,10 +233,15 @@ static inline void blecon_nrf5_l2cap_server_ch_setup_request(ble_evt_t const* p_
     l2cap_server->l2cap_cid = p_ble_evt->evt.l2cap_evt.local_cid; // Save provided CID
 
     err_code = sd_ble_l2cap_ch_setup(nrf5_bluetooth->connection.handle, &l2cap_server->l2cap_cid, &ch_setup_params);
-    if( err_code != NRF_SUCCESS ) {
+    if( (err_code == BLE_ERROR_INVALID_CONN_HANDLE) || (err_code == NRF_ERROR_NOT_FOUND) || (err_code == NRF_ERROR_BUSY) ) {
+        // Not set up. BLE_ERROR_INVALID_CONN_HANDLE, NRF_ERROR_NOT_FOUND (the request's CID gone): the SoftDevice has
+        // ended the link since raising this request, and its BLE_GAP_EVT_DISCONNECTED follows. NRF_ERROR_BUSY: the stack
+        // is busy, and the request is left unanswered. Either way the server takes the next request
+        l2cap_server->l2cap_cid = BLE_L2CAP_CID_INVALID;
         blecon_buffer_free(buf);
         return;
     }
+    blecon_assert(err_code == NRF_SUCCESS); // The other codes: the port's parameters or its SoftDevice configuration
 
     blecon_buffer_queue_push(&l2cap_server->rx_bufs, buf);
 }
@@ -257,24 +257,20 @@ static inline void blecon_nrf5_l2cap_server_ch_rx_setup(struct blecon_nrf5_l2cap
         obj.p_data = buf.data;
         obj.len = buf.sz;
 
-        bool success = false;
-
         uint32_t err_code = sd_ble_l2cap_ch_rx(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid, &obj);
-        if( err_code == NRF_ERROR_RESOURCES ) {
-            goto done;
-        } else if( err_code == NRF_ERROR_INVALID_STATE ) {
-            goto done;
+        if( (err_code == NRF_ERROR_RESOURCES)
+            || (err_code == NRF_ERROR_INVALID_STATE)
+            || (err_code == NRF_ERROR_NOT_FOUND)
+            || (err_code == BLE_ERROR_INVALID_CONN_HANDLE) ) {
+            // Not taken. NRF_ERROR_RESOURCES: the SoftDevice holds as many buffers as it takes. The other three: the
+            // channel is ending (a release under way, the channel gone, or the link), its BLE_L2CAP_EVT_CH_RELEASED
+            // following
+            blecon_buffer_free(buf);
+            return;
         }
         blecon_assert(err_code == NRF_SUCCESS);
 
         blecon_buffer_queue_push(&l2cap_server->rx_bufs, buf);
-        success = true;
-
-    done:
-        if( !success ) {
-            blecon_buffer_free(buf);
-            return;
-        }
     }
 }
 
@@ -282,6 +278,7 @@ static inline void blecon_nrf5_l2cap_server_ch_rx_setup(struct blecon_nrf5_l2cap
 static inline void blecon_nrf5_l2cap_server_ch_setup(struct blecon_nrf5_l2cap_server_t* l2cap_server, ble_evt_t const* p_ble_evt) {
     struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*) l2cap_server->l2cap_server.bluetooth;
 
+    l2cap_server->closing = false; // A previous channel's
     l2cap_server->tx_params.credits = p_ble_evt->evt.l2cap_evt.params.ch_setup.tx_params.credits;
     l2cap_server->tx_params.tx_mps = p_ble_evt->evt.l2cap_evt.params.ch_setup.tx_params.tx_mps;
     l2cap_server->tx_params.tx_mtu = p_ble_evt->evt.l2cap_evt.params.ch_setup.tx_params.tx_mtu;
@@ -292,6 +289,15 @@ static inline void blecon_nrf5_l2cap_server_ch_setup(struct blecon_nrf5_l2cap_se
 
     // Set-up credits
     uint32_t err_code = sd_ble_l2cap_ch_flow_control(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid, BLECON_NRF5_BLUETOOTH_L2CAP_RX_BUF_MAX + BLECON_NRF5_BLUETOOTH_L2CAP_RX_EXTRA_CREDITS, NULL);
+    if( (err_code == NRF_ERROR_INVALID_STATE) || (err_code == NRF_ERROR_NOT_FOUND) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE) ) {
+        // The channel has ended since its setup completed (its release under way, the channel gone, or the link): read
+        // so for the channel this call names, though the header says "an L2CAP channel". The release asked for here
+        // makes either reading end explicitly -- on an ending channel the SoftDevice refuses it, and on a live one it
+        // ends the channel -- and its BLE_L2CAP_EVT_CH_RELEASED frees the setup's buffer: the bearer never opens
+        err_code = sd_ble_l2cap_ch_release(nrf5_bluetooth->connection.handle, l2cap_server->l2cap_cid);
+        blecon_assert((err_code == NRF_SUCCESS) || (err_code == NRF_ERROR_INVALID_STATE) || (err_code == NRF_ERROR_NOT_FOUND) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE));
+        return;
+    }
     blecon_assert(err_code == NRF_SUCCESS);
 
     // Start receiving
@@ -299,7 +305,6 @@ static inline void blecon_nrf5_l2cap_server_ch_setup(struct blecon_nrf5_l2cap_se
     // Bearer open, woohoo!
     blecon_nrf5_l2cap_server_ch_rx_setup(l2cap_server); // Start receiving
     l2cap_server->open = true;
-    l2cap_server->closing = false;
     blecon_bearer_on_open(&l2cap_server->bearer);
 }
 
@@ -329,7 +334,7 @@ static inline void blecon_nrf5_l2cap_server_ch_released(struct blecon_nrf5_l2cap
         blecon_bearer_on_closed(&l2cap_server->bearer);
     }
 
-    blecon_nrf5_l2cap_server_close(&l2cap_server->bearer, &l2cap_server);
+    blecon_nrf5_l2cap_server_close(&l2cap_server->bearer, l2cap_server);
 }
 
 // TX callback

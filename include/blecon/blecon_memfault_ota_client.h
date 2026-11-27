@@ -44,6 +44,12 @@ struct blecon_memfault_ota_client_t {
 
 void blecon_memfault_ota_client_init(struct blecon_memfault_ota_client_t* client, struct blecon_request_processor_t* request_processor, const struct blecon_memfault_ota_parameters_t* parameters, const char* request_namespace, const struct blecon_memfault_ota_client_callbacks_t* callbacks, void* user_data);
 
+// Release what the client holds: a check in flight, detached from the processor with no
+// callback raised, its send buffer, and the client's registration on the request processor,
+// which withdraws the connection vote it holds. A URL already handed to the application stays
+// the application's to free (blecon_memfault_ota_client_free_url()).
+void blecon_memfault_ota_client_cleanup(struct blecon_memfault_ota_client_t* client);
+
 void blecon_memfault_ota_client_check_for_update(struct blecon_memfault_ota_client_t* client);
 
 void blecon_memfault_ota_client_free_url(char* url);

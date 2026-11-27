@@ -49,18 +49,27 @@
 #error "BLE Connection Parameters module must be enabled in the nRF5 SDK config"
 #endif
 
+// The SoftDevice observers (this file's, the GATT server bearer's and the L2CAP server's) call into
+// the event loop, which only thread mode may do, and the loop never polls the SoftDevice
+#if NRF_SDH_DISPATCH_MODEL != NRF_SDH_DISPATCH_MODEL_APPSH
+#error "NRF_SDH_DISPATCH_MODEL must be NRF_SDH_DISPATCH_MODEL_APPSH in the nRF5 SDK config"
+#endif
+
 static struct blecon_nrf5_bluetooth_t _nrf5_bluetooth;
 
-APP_TIMER_DEF(_timer_id);
-
+static size_t advertising_set_from(const struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, size_t index);
+static size_t advertising_set_of_buffer(const struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, const uint8_t* buffer);
+static void advertising_round_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
+static void advertising_round_schedule(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
+static void advertising_round_timeout(struct blecon_task_t* task, void* user_data);
+static void advertising_continue(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, size_t index);
+static bool advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, size_t index);
 static void advertising_stop(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
-static void advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth);
 static void softdevice_init(void);
 static void ble_stack_init(void);
 static void gap_params_init(void);
 static void conn_params_init(void);
 static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context);
-static void adv_timeout_handler(void* p_context);
 
 static void blecon_nrf5_bluetooth_setup(struct blecon_bluetooth_t* bluetooth);
 static void blecon_nrf5_bluetooth_shutdown(struct blecon_bluetooth_t* bluetooth);
@@ -77,6 +86,7 @@ static void blecon_nrf5_bluetooth_connection_disconnect(struct blecon_bluetooth_
 static void blecon_nrf5_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection);
 static void blecon_nrf5_bluetooth_scan_start(struct blecon_bluetooth_t* bluetooth, struct blecon_bluetooth_phy_mask_t phy_mask, bool active_scan);
 static void blecon_nrf5_bluetooth_scan_stop(struct blecon_bluetooth_t* bluetooth);
+static void blecon_nrf5_bluetooth_setup_complete_task(struct blecon_task_t* task, void* user_data);
 
 struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
     static const struct blecon_bluetooth_fn_t bluetooth_fn = {
@@ -104,10 +114,11 @@ struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
     blecon_bluetooth_init(&_nrf5_bluetooth.bluetooth, &bluetooth_fn);
 
     _nrf5_bluetooth.advertising.sets_count = 0;
-    _nrf5_bluetooth.advertising.set_current = 0;
-    _nrf5_bluetooth.advertising.set_next = 0;
-    _nrf5_bluetooth.advertising.handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
     _nrf5_bluetooth.advertising.sets_advertising = 0;
+    _nrf5_bluetooth.advertising.set_current = 0;
+    _nrf5_bluetooth.advertising.on_air = false;
+    blecon_timeout_init(&_nrf5_bluetooth.advertising.round_timeout, advertising_round_timeout, &_nrf5_bluetooth);
+    _nrf5_bluetooth.advertising.handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
 
     _nrf5_bluetooth.connection.handle = BLE_CONN_HANDLE_INVALID;
     _nrf5_bluetooth.connection.phy = blecon_bluetooth_phy_1m;
@@ -120,6 +131,10 @@ struct blecon_bluetooth_t* blecon_nrf5_bluetooth_init(void) {
     memset(&_nrf5_bluetooth.scan_params, 0, sizeof(_nrf5_bluetooth.scan_params));
     _nrf5_bluetooth.is_scanning = false;
 #endif
+
+    // Deferred setup-complete notification (raised out of setup(), never synchronously, once)
+    _nrf5_bluetooth.setup_complete_raised = false;
+    blecon_task_init(&_nrf5_bluetooth.setup_complete_task, blecon_nrf5_bluetooth_setup_complete_task, &_nrf5_bluetooth.bluetooth);
 
     return &_nrf5_bluetooth.bluetooth;
 }
@@ -138,9 +153,21 @@ void blecon_nrf5_bluetooth_setup(struct blecon_bluetooth_t* bluetooth) {
     // Initialize GATT server module
     blecon_nrf5_bluetooth_gatt_server_setup(nrf5_bluetooth);
 
-    // Create timer
-    ret_code_t err_code = app_timer_create(&_timer_id, APP_TIMER_MODE_REPEATED, adv_timeout_handler);
-    blecon_assert(err_code == NRF_SUCCESS);
+    // The stack is ready. Raise on_setup_complete from a scheduler task rather than
+    // synchronously from within setup() (control-flow rule 3: no synchronous up-calls).
+    // The layers above may invoke setup() more than once on a shared base port (as the host
+    // gateway's middleware stack does), so on_setup_complete is idempotent: guard against
+    // double-queueing.
+    if( !nrf5_bluetooth->setup_complete_raised ) {
+        nrf5_bluetooth->setup_complete_raised = true;
+        blecon_scheduler_queue_task(bluetooth->scheduler, &nrf5_bluetooth->setup_complete_task);
+    }
+}
+
+void blecon_nrf5_bluetooth_setup_complete_task(struct blecon_task_t* task, void* user_data) {
+    (void) task;
+    struct blecon_bluetooth_t* bluetooth = (struct blecon_bluetooth_t*) user_data;
+    blecon_bluetooth_on_setup_complete(bluetooth);
 }
 
 void blecon_nrf5_bluetooth_shutdown(struct blecon_bluetooth_t* bluetooth) {
@@ -154,6 +181,7 @@ struct blecon_bluetooth_advertising_set_t* blecon_nrf5_advertising_set_new(struc
     nrf5_bluetooth->advertising.sets_count++;
 
     memset(&adv_set->params, 0, sizeof(struct blecon_bluetooth_advertising_params_t));
+    memset(&adv_set->started_params, 0, sizeof(struct blecon_bluetooth_advertising_params_t));
     memset(adv_set->data, 0, sizeof(adv_set->data));
 
     adv_set->data_sz = 0;
@@ -192,17 +220,12 @@ void blecon_nrf5_bluetooth_advertising_set_start(struct blecon_bluetooth_adverti
 
     nrf5_bluetooth->advertising.sets_advertising++;
     if( nrf5_bluetooth->advertising.sets_advertising > 1 ) {
-        return; // Already advertising
+        // The rounds run: the set has its turn in this one if it comes after the set on air, else in the next
+        return;
     }
-    nrf5_bluetooth->advertising.set_next = (nrf5_adv_set - nrf5_bluetooth->advertising.sets) / sizeof(struct blecon_nrf5_bluetooth_advertising_set_t);
 
-    // Start timer
-    ret_code_t err_code;
-    err_code = app_timer_start(_timer_id, APP_TIMER_TICKS(nrf5_adv_set->params.interval_0_625ms * 1000 / 625), NULL);
-    blecon_assert(err_code == NRF_SUCCESS);
-
-    // Start advertising
-    advertising_start(nrf5_bluetooth);
+    // The first set to advertise: a round now, and one every interval from now on
+    advertising_round_start(nrf5_bluetooth);
 }
 
 void blecon_nrf5_bluetooth_advertising_set_stop(struct blecon_bluetooth_advertising_set_t* adv_set) {
@@ -214,11 +237,18 @@ void blecon_nrf5_bluetooth_advertising_set_stop(struct blecon_bluetooth_advertis
     nrf5_adv_set->is_advertising = false;
     blecon_assert(nrf5_bluetooth->advertising.sets_advertising > 0);
     nrf5_bluetooth->advertising.sets_advertising--;
-    app_timer_stop(_timer_id);
-    advertising_stop(nrf5_bluetooth);
-    if( nrf5_bluetooth->advertising.sets_advertising > 0 ) {
-        // Continue advertising
-        advertising_start(nrf5_bluetooth);
+
+    size_t index = (size_t) (nrf5_adv_set - nrf5_bluetooth->advertising.sets);
+    if( nrf5_bluetooth->advertising.on_air && (nrf5_bluetooth->advertising.set_current == index) ) {
+        // Off the air, the round going on with the sets after it (none, if it was the last to advertise)
+        advertising_stop(nrf5_bluetooth);
+        advertising_continue(nrf5_bluetooth, index + 1);
+    }
+
+    if( nrf5_bluetooth->advertising.sets_advertising == 0 ) {
+        // No more rounds. The set on air, if there was one, was this one
+        blecon_assert(!nrf5_bluetooth->advertising.on_air);
+        blecon_timeout_cancel(&nrf5_bluetooth->advertising.round_timeout);
     }
 }
 
@@ -247,9 +277,33 @@ void blecon_nrf5_bluetooth_connection_get_info(struct blecon_bluetooth_connectio
 void blecon_nrf5_bluetooth_connection_get_power_info(struct blecon_bluetooth_connection_t* connection, int8_t* tx_power, int8_t* rssi) {
     struct blecon_nrf5_bluetooth_connection_t* nrf5_connection = (struct blecon_nrf5_bluetooth_connection_t*) connection;
     *tx_power = BLE_TX_POWER;
+
+    if( nrf5_connection->handle == BLE_CONN_HANDLE_INVALID ) {
+        // The link is gone (its BLE_GAP_EVT_DISCONNECTED handled), and the SoftDevice may have given its handle to a
+        // new link, whose RSSI it would read: no reading, and the SoftDevice is not asked
+        *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
+        return;
+    }
+
+    int8_t rssi_value = 0;
     uint8_t ch_index = 0;
-    ret_code_t err_code = sd_ble_gap_rssi_get(nrf5_connection->handle, rssi, &ch_index);
+    ret_code_t err_code = sd_ble_gap_rssi_get(nrf5_connection->handle, &rssi_value, &ch_index);
+    if( err_code == NRF_ERROR_NOT_FOUND ) {
+        // No connection event sampled yet since the reporting started at the connection: no reading
+        *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
+        return;
+    }
+    if( (err_code == BLE_ERROR_INVALID_CONN_HANDLE) || (err_code == NRF_ERROR_INVALID_STATE) ) {
+        // The SoftDevice has ended the link and its BLE_GAP_EVT_DISCONNECTED, which reaches the port through
+        // app_scheduler, is yet to be handled: the handle is refused, or the reporting has ended with the link (the port
+        // starts it at the connection and never stops it), or the handle is already a new link's, whose reporting the
+        // port starts only on its BLE_GAP_EVT_CONNECTED, queued behind. No reading
+        *rssi = BLECON_BLUETOOTH_RSSI_UNKNOWN;
+        return;
+    }
     blecon_assert(err_code == NRF_SUCCESS);
+
+    *rssi = rssi_value;
 }
 
 void blecon_nrf5_bluetooth_connection_disconnect(struct blecon_bluetooth_connection_t* connection) {
@@ -259,7 +313,9 @@ void blecon_nrf5_bluetooth_connection_disconnect(struct blecon_bluetooth_connect
     }
 
     ret_code_t err_code = sd_ble_gap_disconnect(nrf5_connection->handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-    blecon_assert((err_code == 0) || (err_code == NRF_ERROR_INVALID_STATE /* if disconnection was already triggered, but hasn't completed yet */));
+    // NRF_ERROR_INVALID_STATE: a disconnection already under way, or the link ended; BLE_ERROR_INVALID_CONN_HANDLE: the
+    // link ended. Either way its BLE_GAP_EVT_DISCONNECTED follows
+    blecon_assert((err_code == NRF_SUCCESS) || (err_code == NRF_ERROR_INVALID_STATE) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE));
 }
 
 void blecon_nrf5_bluetooth_connection_free(struct blecon_bluetooth_connection_t* connection) {
@@ -317,14 +373,73 @@ void blecon_nrf5_bluetooth_scan_stop(struct blecon_bluetooth_t* bluetooth) {
 }
 
 // Private functions
-void advertising_stop(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
-    sd_ble_gap_adv_stop(nrf5_bluetooth->advertising.handle);
+// The first set advertising at or after index, in index order: sets_count if none
+size_t advertising_set_from(const struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, size_t index) {
+    while( (index < nrf5_bluetooth->advertising.sets_count) && !nrf5_bluetooth->advertising.sets[index].is_advertising ) {
+        index++;
+    }
+    return index;
 }
 
-void advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
-    const struct blecon_nrf5_bluetooth_advertising_set_t* adv_set = &nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_next];
+// The set whose data buffer the SoftDevice names in an event: sets_count if none
+size_t advertising_set_of_buffer(const struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, const uint8_t* buffer) {
+    for( size_t index = 0; index < nrf5_bluetooth->advertising.sets_count; index++ ) {
+        if( nrf5_bluetooth->advertising.sets[index].data == buffer ) {
+            return index;
+        }
+    }
+    return nrf5_bluetooth->advertising.sets_count;
+}
 
-    // Advertising parameters should only be set if advertising is not running
+void advertising_round_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
+    advertising_round_schedule(nrf5_bluetooth);
+    advertising_continue(nrf5_bluetooth, 0);
+}
+
+// The next round's start, an interval from now
+void advertising_round_schedule(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
+    size_t first = advertising_set_from(nrf5_bluetooth, 0);
+    blecon_assert(first < nrf5_bluetooth->advertising.sets_count);
+
+    // Every set advertises at the one interval the rounds keep
+    uint32_t interval_0_625ms = nrf5_bluetooth->advertising.sets[first].params.interval_0_625ms;
+    for( size_t index = first; index < nrf5_bluetooth->advertising.sets_count; index = advertising_set_from(nrf5_bluetooth, index + 1) ) {
+        blecon_assert(nrf5_bluetooth->advertising.sets[index].params.interval_0_625ms == interval_0_625ms);
+    }
+
+    blecon_scheduler_queue_timeout(nrf5_bluetooth->bluetooth.scheduler, &nrf5_bluetooth->advertising.round_timeout, (interval_0_625ms * 625) / 1000);
+}
+
+void advertising_round_timeout(struct blecon_task_t* task, void* user_data) {
+    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = (struct blecon_nrf5_bluetooth_t*) user_data;
+    blecon_assert(nrf5_bluetooth->advertising.sets_advertising > 0); // Cancelled when the last set stops
+
+    if( nrf5_bluetooth->advertising.on_air ) {
+        // The round before has yet to end (its set on air, or that set's end not handled yet): this round is skipped
+        advertising_round_schedule(nrf5_bluetooth);
+        return;
+    }
+
+    advertising_round_start(nrf5_bluetooth);
+}
+
+// Starts the first set advertising at or after index that the SoftDevice accepts; with none, the round is done and
+// the next starts at the round timeout
+void advertising_continue(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, size_t index) {
+    blecon_assert(!nrf5_bluetooth->advertising.on_air);
+    for( size_t next = advertising_set_from(nrf5_bluetooth, index); next < nrf5_bluetooth->advertising.sets_count; next = advertising_set_from(nrf5_bluetooth, next + 1) ) {
+        if( advertising_start(nrf5_bluetooth, next) ) {
+            return;
+        }
+    }
+}
+
+// Puts the set on the SoftDevice's advertising set for one advertising event: false if the SoftDevice refuses it, a
+// connectable set while the peripheral link is taken
+bool advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth, size_t index) {
+    struct blecon_nrf5_bluetooth_advertising_set_t* adv_set = &nrf5_bluetooth->advertising.sets[index];
+
+    // Advertising parameters may only be set while the SoftDevice's set is not advertising, which none is here
     ble_gap_adv_params_t adv_params = { 0 };
 
     // Advertising PDU
@@ -349,8 +464,7 @@ void advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
     // Interval and duration
     adv_params.interval = BLE_GAP_ADV_INTERVAL_MAX;
     adv_params.duration = 0;
-    adv_params.max_adv_evts = 1; // Always max 1 event
-// Tailgate all advertising sets
+    adv_params.max_adv_evts = 1; // One advertising event: the round tailgates the sets, starting each as the one before ends
 
 // PHY
 #if BLECON_CODED_PHY
@@ -375,7 +489,7 @@ void advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
     blecon_assert(ret == NRF_SUCCESS);
 
     // Set TX power for this advertising handle
-    ret = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, adv_set->params.tx_power, BLE_TX_POWER);
+    ret = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, nrf5_bluetooth->advertising.handle, adv_set->params.tx_power);
     blecon_assert(ret == NRF_SUCCESS);
 
     // Set advertising address
@@ -407,20 +521,30 @@ void advertising_start(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
     }
 #endif
 
-    // Save set number
-    nrf5_bluetooth->advertising.set_current = nrf5_bluetooth->advertising.set_next;
-
-    // Increment rotating advertising sets counter
-    do {
-        nrf5_bluetooth->advertising.set_next = (nrf5_bluetooth->advertising.set_next + 1) % nrf5_bluetooth->advertising.sets_count;
-    } while( !nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_next].is_advertising );
-
-    // Check that both advertising sets have the same interval
-    blecon_assert(adv_set->params.interval_0_625ms == nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_next].params.interval_0_625ms);
-
     // Start advertising
     ret = sd_ble_gap_adv_start(nrf5_bluetooth->advertising.handle, APP_BLE_CONN_CFG_TAG);
+    if( ret == NRF_ERROR_CONN_COUNT ) {
+        // The one peripheral link the port configures is taken (its BLE_GAP_EVT_CONNECTED possibly still queued, after
+        // which the client stops the advertising): no connectable set can advertise until it disconnects. This set's
+        // turn is skipped
+        blecon_assert(adv_set->params.is_connectable);
+        return false;
+    }
     blecon_assert(ret == NRF_SUCCESS);
+
+    nrf5_bluetooth->advertising.set_current = index;
+    nrf5_bluetooth->advertising.on_air = true;
+    adv_set->started_params = adv_set->params;
+    return true;
+}
+
+// Takes the set on air off it. The SoftDevice may have ended its advertising event already, the event (or a
+// connection's) still queued
+void advertising_stop(struct blecon_nrf5_bluetooth_t* nrf5_bluetooth) {
+    blecon_assert(nrf5_bluetooth->advertising.on_air);
+    ret_code_t err_code = sd_ble_gap_adv_stop(nrf5_bluetooth->advertising.handle);
+    blecon_assert((err_code == NRF_SUCCESS) || (err_code == NRF_ERROR_INVALID_STATE));
+    nrf5_bluetooth->advertising.on_air = false;
 }
 
 // Initialize softdevice and configure BLE parameters
@@ -511,30 +635,46 @@ void conn_params_init(void) {
 // Handle BLE events
 void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
     struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = &_nrf5_bluetooth;
+    ret_code_t err_code = NRF_SUCCESS;
     switch( p_ble_evt->header.evt_id ) {
-        case BLE_GAP_EVT_CONNECTED:
+        case BLE_GAP_EVT_CONNECTED: {
+            // The set the connection was made on, which the SoftDevice names by its data buffer: the port may have
+            // started others since, or stopped and updated this one, before handling this event
+            blecon_assert(p_ble_evt->evt.gap_evt.params.connected.role == BLE_GAP_ROLE_PERIPH); // The port has no central role
+            size_t adv_set_index = advertising_set_of_buffer(nrf5_bluetooth, p_ble_evt->evt.gap_evt.params.connected.adv_data.adv_data.p_data);
+            blecon_assert(adv_set_index < nrf5_bluetooth->advertising.sets_count);
+            const struct blecon_nrf5_bluetooth_advertising_set_t* adv_set = &nrf5_bluetooth->advertising.sets[adv_set_index];
+            if( nrf5_bluetooth->advertising.on_air && (nrf5_bluetooth->advertising.set_current == adv_set_index) ) {
+                // Its advertising has ended with the connection, which raises no BLE_GAP_EVT_ADV_SET_TERMINATED: the
+                // round ends here. Stopped all the same, as on that event: should this event be of an earlier start of
+                // the set, the port having stopped and started it again since, the set is on the air
+                advertising_stop(nrf5_bluetooth);
+            }
+
             // Init connection
             blecon_bluetooth_connection_init(&nrf5_bluetooth->connection.connection, &nrf5_bluetooth->bluetooth);
 
             nrf5_bluetooth->connection.handle = p_ble_evt->evt.gap_evt.conn_handle;
 
-            // The connection's PHY is of the current advertising set
-            nrf5_bluetooth->connection.phy = nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_current].params.phy;
-
-            // Update addresses
-            nrf5_bluetooth->connection.our_device_id = nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_current].params.device_id;
+            // The connection's PHY and our address are those the set was started with
+            nrf5_bluetooth->connection.phy = adv_set->started_params.phy;
+            nrf5_bluetooth->connection.our_device_id = adv_set->started_params.device_id;
             struct blecon_bluetooth_addr_t peer_addr = {
                 .addr_type = p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr_type,
             };
             memcpy(peer_addr.bytes, p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLECON_BLUETOOTH_ADDR_SZ);
             nrf5_bluetooth->connection.peer_device_id = blecon_bluetooth_device_id_from_addr(peer_addr);
 
-            // Enable RSSI reporting
-            ret_code_t err_code = sd_ble_gap_rssi_start(nrf5_bluetooth->connection.handle, 1, 3);
-            blecon_assert(err_code == NRF_SUCCESS);
+            // Enable RSSI reporting. BLE_ERROR_INVALID_CONN_HANDLE: the SoftDevice has ended the link since raising this
+            // event (one failing to be established ends within six connection intervals), and its
+            // BLE_GAP_EVT_DISCONNECTED follows. NRF_ERROR_INVALID_STATE, reporting already ongoing: the port starts it
+            // once per connection, so the handle is already a new link's, which an earlier BLE_GAP_EVT_CONNECTED's start
+            // reached. The connection is raised all the same
+            err_code = sd_ble_gap_rssi_start(nrf5_bluetooth->connection.handle, 1, 3);
+            blecon_assert((err_code == NRF_SUCCESS) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE) || (err_code == NRF_ERROR_INVALID_STATE));
 
-            blecon_bluetooth_on_new_connection(&nrf5_bluetooth->bluetooth, &nrf5_bluetooth->connection.connection, &nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_current].set);
-            break;
+            blecon_bluetooth_on_new_connection(&nrf5_bluetooth->bluetooth, &nrf5_bluetooth->connection.connection, &nrf5_bluetooth->advertising.sets[adv_set_index].set);
+        } break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             nrf5_bluetooth->connection.handle = BLE_CONN_HANDLE_INVALID;
@@ -547,28 +687,35 @@ void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
                 .tx_phys = BLE_GAP_PHY_AUTO,
             };
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
-            blecon_assert(err_code == NRF_SUCCESS);
+            // BLE_ERROR_INVALID_CONN_HANDLE or NRF_ERROR_INVALID_STATE (no link): the SoftDevice has ended the link since
+            // raising this event, and its BLE_GAP_EVT_DISCONNECTED follows
+            blecon_assert((err_code == NRF_SUCCESS) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE) || (err_code == NRF_ERROR_INVALID_STATE));
         } break;
 
         case BLE_GATTC_EVT_TIMEOUT:
-            // Disconnect on GATT Client timeout event.
+            // Disconnect on GATT Client timeout event. NRF_ERROR_INVALID_STATE (a disconnection under way, or no link) or
+            // BLE_ERROR_INVALID_CONN_HANDLE: the link is ending or has ended, and its BLE_GAP_EVT_DISCONNECTED follows
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            blecon_assert(err_code == NRF_SUCCESS);
+            blecon_assert((err_code == NRF_SUCCESS) || (err_code == NRF_ERROR_INVALID_STATE) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE));
             break;
 
         case BLE_GATTS_EVT_TIMEOUT:
-            // Disconnect on GATT Server timeout event.
+            // Disconnect on GATT Server timeout event, the same codes accepted
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            blecon_assert(err_code == NRF_SUCCESS);
+            blecon_assert((err_code == NRF_SUCCESS) || (err_code == NRF_ERROR_INVALID_STATE) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE));
             break;
 
         case BLE_GAP_EVT_ADV_SET_TERMINATED:
-            // Rotate advertising set unless this is the last set
-            if( (nrf5_bluetooth->advertising.sets_advertising > 0) && (nrf5_bluetooth->advertising.set_next != 0) ) {
-                // Stop - in case advertising was re-started
-                // before a pending set terminated event was processed
+            // The end of the set on air's advertising event, and the round goes on with the sets after it. An event
+            // naming another set's buffer, or none on air, is of a set the port has stopped since (the stop and the
+            // SoftDevice's end crossing): ignored
+            if( nrf5_bluetooth->advertising.on_air
+                && (p_ble_evt->evt.gap_evt.params.adv_set_terminated.adv_data.adv_data.p_data == nrf5_bluetooth->advertising.sets[nrf5_bluetooth->advertising.set_current].data) ) {
+                // The set is stopped all the same: if this event is of an earlier start of it, the port having stopped
+                // and started it again since, it is on air, and the SoftDevice would refuse the next set's
+                // configuration. That start then loses its advertising event
                 advertising_stop(nrf5_bluetooth);
-                advertising_start(nrf5_bluetooth);
+                advertising_continue(nrf5_bluetooth, nrf5_bluetooth->advertising.set_current + 1);
             }
             break;
         case BLE_GAP_EVT_DATA_LENGTH_UPDATE_REQUEST:
@@ -588,8 +735,10 @@ void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
                 };
 
                 ble_gap_data_length_limitation_t dll = { 0 };
-                ret_code_t err_code = sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, &dlp, &dll);
-                blecon_assert(err_code == NRF_SUCCESS);
+                err_code = sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, &dlp, &dll);
+                // BLE_ERROR_INVALID_CONN_HANDLE or NRF_ERROR_INVALID_STATE (no link): the SoftDevice has ended the link
+                // since raising this event, and its BLE_GAP_EVT_DISCONNECTED follows
+                blecon_assert((err_code == NRF_SUCCESS) || (err_code == BLE_ERROR_INVALID_CONN_HANDLE) || (err_code == NRF_ERROR_INVALID_STATE));
                 break;
             }
         case BLE_GAP_EVT_DATA_LENGTH_UPDATE:
@@ -597,6 +746,11 @@ void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
             break;
 #ifdef S140
         case BLE_GAP_EVT_ADV_REPORT: {
+            if( !nrf5_bluetooth->is_scanning ) {
+                // A report queued before the scan was stopped: dropped, and the scan stays stopped
+                break;
+            }
+
             if( p_ble_evt->evt.gap_evt.params.adv_report.type.status == BLE_GAP_ADV_DATA_STATUS_COMPLETE ) {
                 // Ignore incomplete or truncated data
 
@@ -634,18 +788,5 @@ void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
         default:
             // No implementation needed.
             break;
-    }
-}
-
-void adv_timeout_handler(void* p_context) {
-    struct blecon_nrf5_bluetooth_t* nrf5_bluetooth = &_nrf5_bluetooth;
-    // Rotate advertising set
-    // If next set is not 0, it means we had an overrun into the next slot
-    // So wait for the next timeout event
-    if( (nrf5_bluetooth->advertising.sets_advertising > 0) && (nrf5_bluetooth->advertising.set_next == 0) ) {
-        // Stop - in case advertising was re-started
-        // before a pending timeout event was processed
-        advertising_stop(nrf5_bluetooth);
-        advertising_start(nrf5_bluetooth);
     }
 }

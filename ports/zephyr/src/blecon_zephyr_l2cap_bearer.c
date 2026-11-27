@@ -76,16 +76,29 @@ void blecon_zephyr_l2cap_bearer_server_accept(struct blecon_zephyr_l2cap_bearer_
 
 void blecon_zephyr_l2cap_bearer_init_client(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer, struct blecon_event_loop_t* event_loop, struct bt_conn* conn, uint8_t psm) {
     blecon_zephyr_l2cap_bearer_init_common(l2cap_bearer, event_loop);
+    blecon_assert(conn != NULL); // Zephyr would refuse a NULL one with the code read below as the link's loss
 
     l2cap_bearer->client_nserver = true;
 
-    // Give initial credits
-    bt_l2cap_chan_give_credits(&l2cap_bearer->l2cap_chan.chan, BLECON_L2CAP_MAX_QUEUED_RX_BUFFERS);
-
+    // Set the channel up first: it clears the channel, its credits included, and sets the ops the
+    // credits need
     blecon_zephyr_l2cap_bearer_connect(l2cap_bearer, conn);
 
-    int ret = bt_l2cap_chan_connect(conn, &l2cap_bearer->l2cap_chan.chan, psm);
+    // Give initial credits, which the connection request carries
+    int ret = bt_l2cap_chan_give_credits(&l2cap_bearer->l2cap_chan.chan, BLECON_L2CAP_MAX_QUEUED_RX_BUFFERS);
     blecon_assert(ret == 0);
+
+    ret = bt_l2cap_chan_connect(conn, &l2cap_bearer->l2cap_chan.chan, psm);
+    if( ret == -ENOTCONN ) {
+        // The link is going or gone: Zephyr marks it so before it raises its channels' disconnections,
+        // and this channel may be opened from a sibling's on_closed there. Treated as a refused
+        // connect: nothing is raised, the bearer never opens, and the link's disconnection, already
+        // under way, ends the connection. Zephyr refuses before it adds the channel, so holds nothing.
+        l2cap_bearer->conn = NULL;
+        l2cap_bearer->l2cap_chan.chan.ops = &blecon_zephyr_l2cap_empty_ops;
+    } else {
+        blecon_assert(ret == 0);
+    }
 }
 
 struct blecon_bearer_t* blecon_zephyr_l2cap_bearer_as_bearer(struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer) {
@@ -130,6 +143,12 @@ struct blecon_buffer_t blecon_zephyr_l2cap_bearer_alloc(struct blecon_bearer_t* 
 
 size_t blecon_zephyr_l2cap_bearer_mtu(struct blecon_bearer_t* bearer, void* user_data) {
     struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*) user_data;
+
+    if( (l2cap_bearer->conn == NULL) || (l2cap_bearer->l2cap_chan.tx.mps == 0) ) {
+        // Disconnected, a client channel whose connect was refused, or one still connecting (Zephyr
+        // zeroes the TX MPS until the peer's response): 0 - 2 would read as a huge MTU
+        return 0;
+    }
 
     // The MTU we return is the MPS (maximum PDU size) minus two (L2CAP header size)
     // This will ensure that any SDU sent is not fragmented across multiple PDUs
@@ -230,14 +249,36 @@ void blecon_zephyr_l2cap_bearer_seg_recv(struct bt_l2cap_chan* l2cap_chan, size_
     struct blecon_zephyr_l2cap_bearer_t* l2cap_bearer = (struct blecon_zephyr_l2cap_bearer_t*) ((char*) l2cap_chan - offsetof(struct blecon_zephyr_l2cap_bearer_t, l2cap_chan));
 
     blecon_event_loop_lock(l2cap_bearer->event_loop);
+    if( l2cap_bearer->conn == NULL ) {
+        // Zephyr raises a channel's frames from its system workqueue and the channel's disconnection from its RX
+        // thread: one raised while this frame waited for the lock has closed the bearer. The frame is dropped, and
+        // no credit is given to a channel detached from its link
+        blecon_event_loop_unlock(l2cap_bearer->event_loop);
+        return;
+    }
+
     struct blecon_buffer_t b_buf = blecon_buffer_alloc(seg->len);
     memcpy(b_buf.data, seg->data, seg->len);
 
     blecon_bearer_on_received(&l2cap_bearer->bearer, b_buf);
+
+    // Credit the sender only while the link is connected. Zephyr keeps the channel connected until it processes the
+    // link's disconnection, but sends nothing on a link that has left its connected state (a disconnection requested,
+    // from this frame's on_received or the event loop, or the controller's Disconnection Complete processed), and
+    // its give_credits logs an error for that refused credit. Read under the lock, before the channel's
+    // disconnection can detach it from the link
+    bool link_connected = false;
+    if( l2cap_bearer->conn != NULL ) {
+        struct bt_conn_info conn_info = { 0 };
+        int ret = bt_conn_get_info(l2cap_bearer->conn, &conn_info);
+        blecon_assert(ret == 0);
+        link_connected = (conn_info.state == BT_CONN_STATE_CONNECTED);
+    }
     blecon_event_loop_unlock(l2cap_bearer->event_loop);
 
-    // Issue a credit to the sender
-    bt_l2cap_chan_give_credits(l2cap_chan, 1);
+    if( link_connected ) {
+        bt_l2cap_chan_give_credits(l2cap_chan, 1);
+    }
 
     // The buffer will be dereferenced by the caller upon function return
 }

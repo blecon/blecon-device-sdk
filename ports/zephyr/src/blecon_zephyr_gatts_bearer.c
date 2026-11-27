@@ -30,8 +30,10 @@ static void blecon_zephyr_gatts_bearer_close(struct blecon_bearer_t* bearer, voi
 static ssize_t blecon_zephyr_gatts_bearer_gatt_write(struct bt_conn* conn, const struct bt_gatt_attr* attr, const void* buf, uint16_t len, uint16_t offset, uint8_t flags);
 static void blecon_zephyr_gatts_bearer_gatt_cccd_changed(const struct bt_gatt_attr* attr, uint16_t value);
 static ssize_t blecon_zephyr_gatts_bearer_gatt_cccd_write(struct bt_conn* conn, const struct bt_gatt_attr* attr, uint16_t value);
+static ssize_t blecon_zephyr_gatts_bearer_gatt_cccd_refuse(struct bt_conn* conn, const struct bt_gatt_attr* attr, uint8_t att_err);
 static void blecon_zephyr_gatts_bearer_gatt_notify_done(struct bt_conn* conn, void* user_data);
 static void blecon_zephyr_gatts_bearer_close_callback(struct blecon_task_t* task, void* user_data);
+static void blecon_zephyr_gatts_bearer_set_closed(struct blecon_zephyr_bluetooth_gatt_server_bearer_t* zephyr_gatts_bearer);
 
 static struct blecon_zephyr_bluetooth_t* _zephyr_bluetooth = NULL;
 
@@ -99,16 +101,23 @@ size_t blecon_zephyr_gatts_bearer_mtu(struct blecon_bearer_t* bearer, void* user
     struct blecon_zephyr_bluetooth_gatt_server_bearer_t* zephyr_gatts_bearer = (struct blecon_zephyr_bluetooth_gatt_server_bearer_t*) user_data;
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = zephyr_gatts_bearer->bluetooth;
 
-    return bt_gatt_get_mtu(zephyr_bluetooth->connection.conn) - 3 /* opcode and handle */;
+    // The connection's record of its link's ATT MTU, not bt_gatt_get_mtu: Zephyr reads 0 from the moment the link leaves
+    // its connected state (connection_disconnect's request, or the controller's Disconnection Complete processed) while
+    // the bearer stays open until the CCC's clearing, so a user still sending would read 0 - 3, wrapped
+    return zephyr_bluetooth->connection.att_mtu - 3 /* opcode and handle */;
 }
 
 void blecon_zephyr_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blecon_buffer_t buf, void* user_data) {
     struct blecon_zephyr_bluetooth_gatt_server_bearer_t* zephyr_gatts_bearer = (struct blecon_zephyr_bluetooth_gatt_server_bearer_t*) user_data;
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = zephyr_gatts_bearer->bluetooth;
+    struct bt_conn* conn = zephyr_bluetooth->connection.conn;
 
-    if( !bt_gatt_is_subscribed(zephyr_bluetooth->connection.conn, zephyr_gatts_bearer->attr, BT_GATT_CCC_NOTIFY) ) {
+    // A bearer's user sends only while its connection is held: a NULL conn would notify every connection
+    blecon_assert(conn != NULL);
+
+    if( !bt_gatt_is_subscribed(conn, zephyr_gatts_bearer->attr, BT_GATT_CCC_NOTIFY) ) {
         // A failure here could mean the client has disconnected, but the disconnection event hasn't propagated yet
-        // So only return here
+        // (Zephyr reads no subscription once the link has left its connected state). So only return here
         blecon_buffer_free(buf);
         return;
     }
@@ -121,9 +130,20 @@ void blecon_zephyr_gatts_bearer_send(struct blecon_bearer_t* bearer, struct blec
         .user_data = zephyr_gatts_bearer
     };
 
-    int ret = bt_gatt_notify_cb(zephyr_bluetooth->connection.conn, &params);
-    if( ret ) {
-        blecon_fatal_error();
+    int ret = bt_gatt_notify_cb(conn, &params);
+    if( ret != 0 ) {
+        // The link left its connected state since the check above: Zephyr's priority handler of the controller's
+        // Disconnection Complete runs in the HCI driver's context, not under the event loop's lock. The notification
+        // then fails with -ENOTCONN (bt_gatt_notify_cb's check, or bt_att_send's), -EINVAL (gatt_notify's own
+        // subscription check, under Zephyr's default BT_GATT_ENFORCE_SUBSCRIPTION) or -ENOMEM (its PDU finding no ATT
+        // channel). Dropped as an unsubscribed one is: the CCC's clearing closes the bearer. Any other failure, or any
+        // of the three on a link Zephyr still reads connected (a PDU above the MTU, a peer's unsubscription between
+        // the two checks), is fatal
+        struct bt_conn_info conn_info = { 0 };
+        int info_ret = bt_conn_get_info(conn, &conn_info);
+        blecon_assert(info_ret == 0);
+        blecon_assert((ret == -ENOTCONN) || (ret == -EINVAL) || (ret == -ENOMEM));
+        blecon_assert(conn_info.state != BT_CONN_STATE_CONNECTED);
     }
 
     blecon_buffer_free(buf);
@@ -137,6 +157,9 @@ void blecon_zephyr_gatts_bearer_close(struct blecon_bearer_t* bearer, void* user
         return;
     }
 
+    // A second close before the task has run leaves one queued (the fragmentation layer closes its bearer on an
+    // oversized record, and the layers above close it too)
+    blecon_task_cancel(&zephyr_gatts_bearer->close_task);
     blecon_scheduler_queue_task(zephyr_bluetooth->bluetooth.scheduler, &zephyr_gatts_bearer->close_task);
 }
 
@@ -179,11 +202,12 @@ void blecon_zephyr_gatts_bearer_gatt_cccd_changed(const struct bt_gatt_attr* att
         blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
         return;
     }
-    zephyr_gatts_bearer->connected = now_connected;
-    if( zephyr_gatts_bearer->connected ) {
+    if( now_connected ) {
+        zephyr_gatts_bearer->connected = true;
         blecon_bearer_on_open(&zephyr_gatts_bearer->bearer);
     } else {
-        blecon_bearer_on_closed(&zephyr_gatts_bearer->bearer);
+        // The peer's write, or Zephyr clearing the CCC of a peer it holds no bond with at the disconnection
+        blecon_zephyr_gatts_bearer_set_closed(zephyr_gatts_bearer);
     }
     blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
 }
@@ -191,27 +215,61 @@ void blecon_zephyr_gatts_bearer_gatt_cccd_changed(const struct bt_gatt_attr* att
 ssize_t blecon_zephyr_gatts_bearer_gatt_cccd_write(struct bt_conn* conn, const struct bt_gatt_attr* attr, uint16_t value) {
     struct blecon_zephyr_bluetooth_t* zephyr_bluetooth = _zephyr_bluetooth;
 
-    // The Zephyr host stack performs the following operations when handling a write to the CCCD:
-    // * Call write callback with the new value
-    // * Abort if the write is not accepted
+    // The Zephyr host stack performs the following operations when handling a write to the CCCD (bt_gatt_attr_write_ccc):
+    // * Claim a configuration slot for the peer, if it has none (a write of 0 from a peer without one ends here)
+    // * Call this write callback with the new value
+    // * Abort if the write is refused, the slot left claimed (released by blecon_zephyr_gatts_bearer_gatt_cccd_refuse)
     // * Store the new value
-    // * Call CCCD changed callback with the new value
-    // Therefore, we only check if the write is made on the correct connection
-    // If not, we reject it
-    // The changed callback will be called with the new value, if the write is accepted
-    // We don't handle the code which is in the changed callback here, as the new value CCCD hasn't been stored yet
-    // Which means bt_gatt_is_subscribed() will return false at this stage, and blecon_zephyr_gatts_bearer_send() would assert
+    // * Call the CCCD changed callback with the highest value of every connected peer's
+    // Therefore, this callback only decides whether the write is accepted: the value is one the characteristic allows,
+    // and the write is on the Blecon connection. The bearer opens or closes in the changed callback, as the new value
+    // hasn't been stored yet here: bt_gatt_is_subscribed() would return false at this stage, and
+    // blecon_zephyr_gatts_bearer_send() would drop what the bearer's user sent from its on_open
 
-    blecon_event_loop_lock(zephyr_bluetooth->event_loop);
-
-    // Ignore if not a Blecon connection
-    if( conn != zephyr_bluetooth->connection.conn ) {
-        blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
-        return BT_GATT_ERR(BT_ATT_ERR_APPLICATION_0); // Reject the write
+    // Notifications or nothing, as the characteristic declares notifications only. Zephyr checks no value against the
+    // characteristic's properties, and would store indications too, which the changed callback reads as the bearer
+    // closed: refused with NimBLE's answer to a bit its characteristic does not allow
+    if( (value != 0) && (value != BT_GATT_CCC_NOTIFY) ) {
+        return blecon_zephyr_gatts_bearer_gatt_cccd_refuse(conn, attr, BT_ATT_ERR_NOT_SUPPORTED);
     }
 
+    blecon_event_loop_lock(zephyr_bluetooth->event_loop);
+    bool blecon_connection = (conn == zephyr_bluetooth->connection.conn);
     blecon_event_loop_unlock(zephyr_bluetooth->event_loop);
+
+    // Not a Blecon connection: Zephyr's changed callback reports the highest value of every connected peer's, so a
+    // subscription on another connection would read as the Blecon one's
+    if( !blecon_connection ) {
+        return blecon_zephyr_gatts_bearer_gatt_cccd_refuse(conn, attr, BT_ATT_ERR_APPLICATION_0);
+    }
+
     return sizeof(value);
+}
+
+// Refuses a CCCD write, and releases the configuration slot Zephyr claimed for it. bt_gatt_attr_write_ccc claims a slot
+// for the peer (its address and identity) before it asks the write callback, and frees a slot only when its peer writes
+// 0, or at its peer's disconnection if the slot's value is set: a refused write's slot, at 0, would stay claimed until
+// that peer wrote again, and BT_GATT_CCC_MAX refusals from distinct peers would leave no slot for any subscription, the
+// Blecon one's answered with Insufficient Resources until reboot. A peer's slot at 0 is only ever a refusal's (Zephyr
+// clears one written to 0), so it is reset as Zephyr's own clear_ccc_cfg does; a slot holding a value (a refused
+// rewrite of an existing subscription) is the peer's subscription, and is kept
+ssize_t blecon_zephyr_gatts_bearer_gatt_cccd_refuse(struct bt_conn* conn, const struct bt_gatt_attr* attr, uint8_t att_err) {
+    struct bt_gatt_ccc_managed_user_data* ccc = attr->user_data;
+
+    struct bt_conn_info conn_info = { 0 };
+    int ret = bt_conn_get_info(conn, &conn_info);
+    blecon_assert(ret == 0);
+
+    for( size_t idx = 0; idx < ARRAY_SIZE(ccc->cfg); idx++ ) {
+        struct bt_gatt_ccc_cfg* cfg = &ccc->cfg[idx];
+        if( (cfg->value == 0) && (cfg->id == conn_info.id) && bt_addr_le_eq(&cfg->peer, conn_info.le.dst) ) {
+            bt_addr_le_copy(&cfg->peer, BT_ADDR_LE_ANY);
+            cfg->id = 0;
+            cfg->value = 0;
+        }
+    }
+
+    return BT_GATT_ERR(att_err);
 }
 
 void blecon_zephyr_gatts_bearer_gatt_notify_done(struct bt_conn* conn, void* user_data) {
@@ -224,9 +282,16 @@ void blecon_zephyr_gatts_bearer_gatt_notify_done(struct bt_conn* conn, void* use
 
 void blecon_zephyr_gatts_bearer_close_callback(struct blecon_task_t* task, void* user_data) {
     struct blecon_zephyr_bluetooth_gatt_server_bearer_t* zephyr_gatts_bearer = user_data;
-    if( !zephyr_gatts_bearer->connected ) {
-        return;
-    }
+
+    // Queued only on an open bearer, and cancelled by its every close
+    blecon_zephyr_gatts_bearer_set_closed(zephyr_gatts_bearer);
+}
+
+// Closes an open bearer: its user's close, if queued, is dropped (it would close the bearer's next opening), then
+// on_closed is raised
+void blecon_zephyr_gatts_bearer_set_closed(struct blecon_zephyr_bluetooth_gatt_server_bearer_t* zephyr_gatts_bearer) {
+    blecon_assert(zephyr_gatts_bearer->connected);
     zephyr_gatts_bearer->connected = false;
+    blecon_task_cancel(&zephyr_gatts_bearer->close_task);
     blecon_bearer_on_closed(&zephyr_gatts_bearer->bearer);
 }
